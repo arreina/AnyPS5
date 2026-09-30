@@ -286,6 +286,64 @@ void verifyEntryRoundTrip() {
     require(ShaderDiskCache::DecodeEntry(file, otherKey, decoded) == ShaderDiskCache::LoadStatus::KeyMismatch, "an entry for another key loads");
 }
 
+std::size_t corruptionCases() {
+    const char* value = std::getenv("ANYPS5_SHADER_CACHE_FUZZ_CASES");
+    return value == nullptr ? 2000 : std::stoul(value);
+}
+
+void corrupt(std::mt19937_64& random, std::vector<std::byte>& bytes) {
+    static constexpr std::uint64_t extremes[] = {0, 1, 2, 3, 0xff, 0x100, 0xffff, 0x7fffffff, 0xffffffff, 0x100000000ull, 0x7fffffffffffffffull, 0xffffffffffffffffull};
+    const auto mutations = 1 + random() % 4;
+    for (std::uint64_t mutation = 0; mutation < mutations; ++mutation) {
+        const auto kind = random() % 10;
+        if (kind == 0 && !bytes.empty()) {
+            bytes.resize(random() % bytes.size());
+        } else if (kind == 1) {
+            bytes.insert(bytes.begin() + static_cast<std::ptrdiff_t>(random() % (bytes.size() + 1)), static_cast<std::byte>(random()));
+        } else if (kind < 5 && bytes.size() >= 8) {
+            const auto value = extremes[random() % std::size(extremes)];
+            const std::size_t width = random() % 2 == 0 ? 4 : 8;
+            const auto offset = random() % (bytes.size() - width + 1);
+            std::memcpy(bytes.data() + offset, &value, width);
+        } else if (!bytes.empty()) {
+            bytes[random() % bytes.size()] = static_cast<std::byte>(random());
+        }
+    }
+}
+
+void verifyCorruptedPayloads() {
+    SampleRequest sample;
+    const auto key = sample.Key();
+    const auto file = ShaderDiskCache::EncodeEntry(key, sampleVariant());
+    const auto payloadOffset = 48 + key.size();
+    const std::vector<std::byte> payload(file.begin() + static_cast<std::ptrdiff_t>(payloadOffset), file.end());
+    std::vector<std::byte> result;
+    ShaderDiskCache::EncodeResult(sampleResult(), result);
+    std::mt19937_64 random(20260930);
+    const auto cases = corruptionCases();
+    std::size_t loaded = 0;
+    for (std::size_t index = 0; index < cases; ++index) {
+        auto damaged = payload;
+        corrupt(random, damaged);
+        auto entry = std::vector<std::byte>(file.begin(), file.begin() + static_cast<std::ptrdiff_t>(payloadOffset));
+        entry.insert(entry.end(), damaged.begin(), damaged.end());
+        const std::uint64_t payloadBytes = damaged.size();
+        const auto payloadHash = HashBytes(damaged);
+        std::memcpy(entry.data() + 24, &payloadBytes, sizeof(payloadBytes));
+        std::memcpy(entry.data() + 40, &payloadHash, sizeof(payloadHash));
+        CompiledVariant decoded;
+        const auto status = ShaderDiskCache::DecodeEntry(entry, key, decoded);
+        require(status == ShaderDiskCache::LoadStatus::Loaded || status == ShaderDiskCache::LoadStatus::Rejected, "corrupted entry " + std::to_string(index) + " returned an unexpected status");
+        if (status == ShaderDiskCache::LoadStatus::Loaded) ++loaded;
+
+        auto damagedResult = result;
+        corrupt(random, damagedResult);
+        RecompileResult decodedResult;
+        static_cast<void>(ShaderDiskCache::DecodeResult(damagedResult, decodedResult));
+    }
+    std::cout << "corrupted shader cache payloads: " << cases << " decoded, " << loaded << " loaded\n";
+}
+
 void verifyKeySensitivity() {
     SampleRequest base;
     const auto key = base.Key();
@@ -456,6 +514,7 @@ int main(int argc, char** argv) {
         setEnvironment("ANYPS5_SHADER_CACHE_DIR", directory.string());
         verifyResultRoundTrip();
         verifyEntryRoundTrip();
+        verifyCorruptedPayloads();
         verifyKeySensitivity();
         verifyStore();
         verifyAcrossProcesses(argv[0]);
