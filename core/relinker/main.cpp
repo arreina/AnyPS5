@@ -26,6 +26,25 @@
 #include <string>
 #include <vector>
 
+namespace {
+
+std::string _printable(const std::string& text) {
+    static constexpr char digits[] = "0123456789abcdef";
+    std::string result;
+    for (const unsigned char character : text) {
+        if (character >= 0x20 && character != 0x7f) {
+            result += static_cast<char>(character);
+            continue;
+        }
+        result += "\\x";
+        result += digits[character >> 4];
+        result += digits[character & 15];
+    }
+    return result;
+}
+
+}
+
 int main(const int argc, char* argv[]) {
     Cli::Args args;
     try {
@@ -128,17 +147,17 @@ int main(const int argc, char* argv[]) {
         if (args.autorun) return Cli::Autorun(absPath, args.toWindows);
 
     } catch (const Domain::RelinkerException& e) {
-        std::cerr << "FAIL: " << e.what();
+        std::cerr << "FAIL: " << _printable(e.what());
         if (e.FailureOffset != 0) std::cerr << " (offset 0x" << std::hex << e.FailureOffset << ")";
         std::cerr << "\n";
         return 2;
     } catch (const Codegen::CodegenException& e) {
-        std::cerr << "FAIL: " << e.what();
+        std::cerr << "FAIL: " << _printable(e.what());
         if (e.FailureOffset != 0) std::cerr << " (offset 0x" << std::hex << e.FailureOffset << ")";
         std::cerr << "\n";
         return 2;
     } catch (const std::exception& e) {
-        std::cerr << "FAIL: " << e.what() << "\n";
+        std::cerr << "FAIL: " << _printable(e.what()) << "\n";
         return 2;
     }
 
