@@ -196,6 +196,8 @@ if(BUILD_TESTING)
             ${CMAKE_CURRENT_SOURCE_DIR}/relinker/tests/test_guest_intel_trampolines.py $<TARGET_FILE:relinker>)
         add_test(NAME elf_header COMMAND ${Python3_EXECUTABLE}
             ${CMAKE_CURRENT_SOURCE_DIR}/relinker/tests/test_elf_header.py $<TARGET_FILE:relinker>)
+        add_test(NAME fail_message_escaping COMMAND ${Python3_EXECUTABLE}
+            ${CMAKE_CURRENT_SOURCE_DIR}/relinker/tests/test_fail_message_escaping.py $<TARGET_FILE:relinker>)
     else()
         message(STATUS "Python3 interpreter not found; skipping Python relinker tests")
     endif()
