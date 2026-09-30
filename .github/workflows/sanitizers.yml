@@ -1,0 +1,32 @@
+name: Sanitizers
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sanitizers-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  relinker:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1
+      ANYPS5_MALFORMED_ELF_CASES: '2000'
+      ANYPS5_DECODER_FUZZ_CASES: '200000'
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: true
+      - run: >-
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo -DBUILD_TESTING=ON
+          -DANYPS5_SANITIZERS=ON -DCMAKE_C_COMPILER=gcc -DCMAKE_CXX_COMPILER=g++
+      - run: cmake --build build --target core/relinker/all
+      - run: ctest --test-dir build/core/relinker --output-on-failure --timeout 600

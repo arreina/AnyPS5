@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 import random
 import subprocess
@@ -6,7 +7,7 @@ import tempfile
 
 from test_optional_plt import fixture
 
-CASES = 150
+CASES = int(os.environ.get("ANYPS5_MALFORMED_ELF_CASES", "150"))
 SEED = 20260930
 EXTREMES = [0, 1, 0x7f, 0xff, 0xffff, 0x7fffffff, 0xffffffff, 0x7fffffffffffffff, 0xffffffffffffffff]
 FIELDS = [(0x10, 2), (0x12, 2), (0x18, 8), (0x20, 8), (0x28, 8), (0x36, 2), (0x38, 2), (0x3a, 2), (0x3c, 2), (0x3e, 2)]
