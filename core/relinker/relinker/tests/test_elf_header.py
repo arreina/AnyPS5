@@ -10,7 +10,8 @@ def main():
         ("tiny", bytes(10), "File too small for ELF header"),
         ("truncated", b"\x7fELF\x02\x01\x01" + bytes(25), "File too small for ELF header"),
         ("header-only", b"\x7fELF\x02\x01\x01" + bytes(57), "No PT_DYNAMIC segment found"),
-        ("bad-magic", bytes(64), "Invalid ELF magic number"),
+        ("bad-magic", bytes(64), "Invalid ELF magic number: expected 7f 45 4c 46, found 00 00 00 00"),
+        ("other-magic", b"\x4f\x15\x3d\x1d" + bytes(60), "found 4f 15 3d 1d"),
     ]
     with tempfile.TemporaryDirectory(prefix="anyps5-elf-header-") as directory:
         for name, data, error in cases:

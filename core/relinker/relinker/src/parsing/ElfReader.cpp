@@ -1,6 +1,8 @@
 #include <relinker/parsing/ElfReader.hpp>
 #include <relinker/domain/Types.hpp>
 #include <cstring>
+#include <iomanip>
+#include <sstream>
 
 namespace Relinker {
 
@@ -54,7 +56,12 @@ ElfHeader ElfReader::ReadHeader() const {
 
     if (_fileBuffer[0] != 0x7f || _fileBuffer[1] != 'E' ||
         _fileBuffer[2] != 'L' || _fileBuffer[3] != 'F') {
-        throw RelinkerException("Invalid ELF magic number");
+        std::ostringstream message;
+        message << "Invalid ELF magic number: expected 7f 45 4c 46, found" << std::hex << std::setfill('0');
+        for (std::size_t i = 0; i < 4; ++i) {
+            message << ' ' << std::setw(2) << static_cast<unsigned>(_fileBuffer[i]);
+        }
+        throw RelinkerException(message.str());
     }
 
     ElfHeader header{};
