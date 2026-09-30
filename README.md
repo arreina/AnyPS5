@@ -30,6 +30,8 @@ The relinker uses only the C++20 standard library and should build with any conf
 
 [libc.prx](core/libs/prx/libc) implementations contain compiler-specific code. Linux builds work with GCC; on Windows, MinGW-w64 GCC 15.2.0 (`winlibs-gcc15`, `x86_64-ucrt-posix-seh`) is currently required.
 
+On Linux, `tools/build-linux.sh` initializes the submodules, builds the project and the `libs` target, and runs the tests. `BUILD_DIR`, `BUILD_TYPE` and `JOBS` override the defaults; `--no-tests` skips the tests.
+
 The project targets maximum compiler portability. Support for additional compilers will be addressed after the first successful game launch.
 
 ## Compatibility
