@@ -13,8 +13,11 @@ add_compile_definitions(APS5_ENABLE_TIMING_LOG=$<BOOL:${APS5_ENABLE_TIMING_LOG}>
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-option(ANYPS5_SANITIZERS "Build the relinker with AddressSanitizer and UndefinedBehaviorSanitizer" OFF)
-if(NOT ANYPS5_SANITIZERS)
+option(ANYPS5_SANITIZERS "Build with AddressSanitizer and UndefinedBehaviorSanitizer" OFF)
+if(ANYPS5_SANITIZERS)
+    add_compile_options(-fsanitize=address,undefined -fno-omit-frame-pointer)
+    add_link_options(-fsanitize=address,undefined)
+else()
     set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -static -static-libgcc -static-libstdc++")
 endif()
 
