@@ -35,8 +35,9 @@ def main():
             (work / "sce_module" / "sample.prx").write_bytes(module_with_dependency(name))
             result = subprocess.run([str(relinker), str(source), str(output)], capture_output=True, timeout=30)
             assert result.returncode == 2 and not output.exists(), result
-            assert result.stderr.startswith(b"FAIL: ") and result.stderr.endswith(expected), result.stderr
-            assert result.stderr.count(b"\n") == 1 and b"\x1b" not in result.stderr, result.stderr
+            stderr = result.stderr.replace(b"\r\n", b"\n")
+            assert stderr.startswith(b"FAIL: ") and stderr.endswith(expected), stderr
+            assert stderr.count(b"\n") == 1 and b"\x1b" not in stderr and b"\r" not in stderr, stderr
     print("FAIL message escaping tests passed")
 
 
