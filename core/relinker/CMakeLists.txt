@@ -145,6 +145,16 @@ if(BUILD_TESTING)
     )
     add_test(NAME amd64_only_converter COMMAND amd64_only_converter_tests)
 
+    add_executable(x64_instruction_decoder_fuzz_tests
+        ${CMAKE_CURRENT_SOURCE_DIR}/codegen/tests/X64InstructionDecoderFuzzTests.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/codegen/src/x86/X64InstructionDecoder.cpp
+    )
+    target_include_directories(x64_instruction_decoder_fuzz_tests PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/domain/include
+        ${CMAKE_CURRENT_SOURCE_DIR}/codegen/include
+    )
+    add_test(NAME x64_instruction_decoder_fuzz COMMAND x64_instruction_decoder_fuzz_tests)
+
     find_package(Python3 QUIET COMPONENTS Interpreter)
     if(Python3_Interpreter_FOUND)
         add_test(NAME input_file COMMAND ${Python3_EXECUTABLE}
