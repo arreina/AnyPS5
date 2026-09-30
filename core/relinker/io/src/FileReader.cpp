@@ -1,10 +1,15 @@
 #include <io/FileReader.hpp>
 #include <domain/Types.hpp>
+#include <filesystem>
 #include <fstream>
+#include <system_error>
 
 namespace Io {
 
 std::vector<std::uint8_t> FileReader::Read(const std::string& path) {
+    std::error_code error;
+    if (std::filesystem::exists(path, error) && !std::filesystem::is_regular_file(path, error))
+        throw Domain::RelinkerException("Not a regular file: " + path);
     std::ifstream f(path, std::ios::binary | std::ios::ate);
     if (!f)
         throw Domain::RelinkerException("Cannot open file: " + path);
