@@ -36,7 +36,9 @@ std::uint32_t instructionWord(std::mt19937_64& random) {
     const auto prefix = kEncodingPrefixes[random() % std::size(kEncodingPrefixes)];
     const auto prefixBits = prefix >= 0xf0000000u ? 6u : prefix >= 0xbe800000u ? 9u : prefix >= 0xc8000000u ? 6u : prefix == 0u ? 1u : 7u;
     const auto mask = 0xffffffffu >> prefixBits;
-    return prefix | (static_cast<std::uint32_t>(random()) & mask);
+    auto word = prefix | (static_cast<std::uint32_t>(random()) & mask);
+    if (prefix == 0xf8000000u && random() % 4 != 0) word &= 0xfc001fffu;
+    return word;
 }
 
 std::uint32_t followingWord(std::mt19937_64& random) {
