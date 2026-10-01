@@ -48,8 +48,8 @@ jobs:
       - run: >-
           cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo -DBUILD_TESTING=ON
           -DANYPS5_SANITIZERS=ON -DCMAKE_C_COMPILER=gcc -DCMAKE_CXX_COMPILER=g++
-      - run: >-
-          cmake --build build --target agc_driver_tests agc_shader_memory_tests agc_structurizer_tests
-          agc_dpp_write_tests agc_shader_disk_cache_tests agc_driver_flip_tests agc_driver_pm4_tests
-          agc_driver_graphics_tests agc_register_command_tests
+      - run: |
+          targets=$(ctest --test-dir build -N -R '^agc_' | python3 -c "import re, sys; print(' '.join(sorted({n if n.endswith('_tests') else n + '_tests' for n in re.findall(r'Test +#\d+: (\S+)', sys.stdin.read())})))")
+          echo "Building $targets"
+          cmake --build build --target $targets
       - run: ctest --test-dir build -R '^agc_' --output-on-failure --timeout 1200
