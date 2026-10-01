@@ -53,7 +53,9 @@ constexpr Vop2OpcodeInfo vop2Opcodes[] = {
     {0x05u, RdnaOpcode::VSubrevF32},
     {0x08u, RdnaOpcode::VMulF32, Vop2SdwaProfile::Float32},
     {0x09u, RdnaOpcode::VMulI32I24, Vop2SdwaProfile::IntegerFullDestination},
+    {0x0au, RdnaOpcode::VMulHiI32I24, Vop2SdwaProfile::IntegerFullDestination},
     {0x0bu, RdnaOpcode::VMulU32U24, Vop2SdwaProfile::IntegerFullDestination},
+    {0x0cu, RdnaOpcode::VMulHiU32U24, Vop2SdwaProfile::IntegerFullDestination},
     {0x0fu, RdnaOpcode::VMinF32},
     {0x10u, RdnaOpcode::VMaxF32},
     {0x11u, RdnaOpcode::VMinI32},
@@ -258,6 +260,12 @@ constexpr VopcOpcodeInfo vopcOpcodes[] = {
     {0x95u, RdnaOpcode::VCmpxNeI32},
     {0x96u, RdnaOpcode::VCmpxGeI32},
     {0x98u, RdnaOpcode::VCmpxClassF32},
+    {0x99u, RdnaOpcode::VCmpxLtI16},
+    {0x9au, RdnaOpcode::VCmpxEqI16},
+    {0x9bu, RdnaOpcode::VCmpxLeI16},
+    {0x9cu, RdnaOpcode::VCmpxGtI16},
+    {0x9du, RdnaOpcode::VCmpxNeI16},
+    {0x9eu, RdnaOpcode::VCmpxGeI16},
     {0xa9u, RdnaOpcode::VCmpLtU16},
     {0xaau, RdnaOpcode::VCmpEqU16},
     {0xabu, RdnaOpcode::VCmpLeU16},
@@ -265,7 +273,11 @@ constexpr VopcOpcodeInfo vopcOpcodes[] = {
     {0xadu, RdnaOpcode::VCmpNeU16},
     {0xaeu, RdnaOpcode::VCmpGeU16},
     {0xb9u, RdnaOpcode::VCmpxLtU16, false},
+    {0xbau, RdnaOpcode::VCmpxEqU16},
+    {0xbbu, RdnaOpcode::VCmpxLeU16},
     {0xbcu, RdnaOpcode::VCmpxGtU16},
+    {0xbdu, RdnaOpcode::VCmpxNeU16},
+    {0xbeu, RdnaOpcode::VCmpxGeU16},
     {0xc0u, RdnaOpcode::VCmpFU32},
     {0xc1u, RdnaOpcode::VCmpLtU32},
     {0xc2u, RdnaOpcode::VCmpEqU32},
@@ -1124,8 +1136,18 @@ bool isVopcCompareExec(RdnaOpcode opcode) {
         case RdnaOpcode::VCmpxGeU32:
         case RdnaOpcode::VCmpxNeI64:
         case RdnaOpcode::VCmpxNeU64:
+        case RdnaOpcode::VCmpxLtI16:
+        case RdnaOpcode::VCmpxEqI16:
+        case RdnaOpcode::VCmpxLeI16:
+        case RdnaOpcode::VCmpxGtI16:
+        case RdnaOpcode::VCmpxNeI16:
+        case RdnaOpcode::VCmpxGeI16:
         case RdnaOpcode::VCmpxLtU16:
+        case RdnaOpcode::VCmpxEqU16:
+        case RdnaOpcode::VCmpxLeU16:
         case RdnaOpcode::VCmpxGtU16:
+        case RdnaOpcode::VCmpxNeU16:
+        case RdnaOpcode::VCmpxGeU16:
         case RdnaOpcode::VCmpxLtF16:
         case RdnaOpcode::VCmpxEqF16:
         case RdnaOpcode::VCmpxLeF16:

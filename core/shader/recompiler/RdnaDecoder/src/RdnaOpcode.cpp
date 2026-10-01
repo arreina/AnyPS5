@@ -232,6 +232,8 @@ bool IsVectorAluOpcode(RdnaOpcode opcode) {
         case RdnaOpcode::VFmaakF16:
         case RdnaOpcode::VMulI32I24:
         case RdnaOpcode::VMulU32U24:
+        case RdnaOpcode::VMulHiI32I24:
+        case RdnaOpcode::VMulHiU32U24:
         case RdnaOpcode::VMulLoI32:
         case RdnaOpcode::VMulHiI32:
         case RdnaOpcode::VCvtPkrtzF16F32:
@@ -367,6 +369,12 @@ bool IsVectorAluOpcode(RdnaOpcode opcode) {
         case RdnaOpcode::VCmpGtI16:
         case RdnaOpcode::VCmpNeI16:
         case RdnaOpcode::VCmpGeI16:
+        case RdnaOpcode::VCmpxLtI16:
+        case RdnaOpcode::VCmpxEqI16:
+        case RdnaOpcode::VCmpxLeI16:
+        case RdnaOpcode::VCmpxGtI16:
+        case RdnaOpcode::VCmpxNeI16:
+        case RdnaOpcode::VCmpxGeI16:
         case RdnaOpcode::VCmpLtF16:
         case RdnaOpcode::VCmpEqF16:
         case RdnaOpcode::VCmpLeF16:
@@ -393,7 +401,11 @@ bool IsVectorAluOpcode(RdnaOpcode opcode) {
         case RdnaOpcode::VCmpLeU16:
         case RdnaOpcode::VCmpGtU16:
         case RdnaOpcode::VCmpxLtU16:
+        case RdnaOpcode::VCmpxEqU16:
+        case RdnaOpcode::VCmpxLeU16:
         case RdnaOpcode::VCmpxGtU16:
+        case RdnaOpcode::VCmpxNeU16:
+        case RdnaOpcode::VCmpxGeU16:
         case RdnaOpcode::VCmpNeU16:
         case RdnaOpcode::VCmpGeU16:
         case RdnaOpcode::VCmpFU32:

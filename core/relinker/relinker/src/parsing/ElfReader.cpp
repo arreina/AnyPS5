@@ -1,8 +1,6 @@
 #include <relinker/parsing/ElfReader.hpp>
 #include <relinker/domain/Types.hpp>
 #include <cstring>
-#include <iomanip>
-#include <sstream>
 
 namespace Relinker {
 
@@ -21,6 +19,17 @@ ElfReader::ElfReader(std::vector<std::uint8_t> fileBuffer)
 
 const std::vector<std::uint8_t>& ElfReader::GetRawBytes() const {
     return _fileBuffer;
+}
+
+std::string ElfReader::formatMagic() const {
+    static constexpr char digits[] = "0123456789abcdef";
+    std::string text;
+    for (std::size_t index = 0; index < 4; ++index) {
+        if (index != 0) text += ' ';
+        text += digits[_fileBuffer[index] >> 4];
+        text += digits[_fileBuffer[index] & 0x0f];
+    }
+    return text;
 }
 
 std::uint8_t ElfReader::_readU8At(FileByteOffset fileByteOffset) const {
@@ -62,14 +71,13 @@ ElfHeader ElfReader::ReadHeader() const {
         throw RelinkerException("File too small for ELF header");
     }
 
+    if (_fileBuffer[0] == 0x4f && _fileBuffer[1] == 0x15 && _fileBuffer[2] == 0x3d && _fileBuffer[3] == 0x1d) {
+        throw RelinkerException("The input is a SELF container, not an ELF");
+    }
+
     if (_fileBuffer[0] != 0x7f || _fileBuffer[1] != 'E' ||
         _fileBuffer[2] != 'L' || _fileBuffer[3] != 'F') {
-        std::ostringstream message;
-        message << "Invalid ELF magic number: expected 7f 45 4c 46, found" << std::hex << std::setfill('0');
-        for (std::size_t i = 0; i < 4; ++i) {
-            message << ' ' << std::setw(2) << static_cast<unsigned>(_fileBuffer[i]);
-        }
-        throw RelinkerException(message.str());
+        throw RelinkerException("Invalid ELF magic number: " + formatMagic());
     }
 
     ElfHeader header{};

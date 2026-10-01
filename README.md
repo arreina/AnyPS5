@@ -34,7 +34,7 @@ On Intel hosts, pass `--to-intel` to the relinker to lower supported AMD-only in
 
 On Linux, `tools/build-linux.sh` initializes the submodules, builds the project and the `libs` target, and runs the tests. `BUILD_DIR`, `BUILD_TYPE` and `JOBS` override the defaults; `--no-tests` skips the tests.
 
-The project targets maximum compiler portability. Support for additional compilers will be addressed after the first successful game launch.
+The project targets maximum compiler portability (but now it is not implemented).
 
 ## Compatibility
 
