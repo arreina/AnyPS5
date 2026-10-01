@@ -371,8 +371,10 @@ private:
                 }
             }
         }
+        const double real = std::strtod(text.c_str(), nullptr);
+        if (!std::isfinite(real)) return false;
         out.type = TypeReal;
-        out.real = std::strtod(text.c_str(), nullptr);
+        out.real = real;
         return true;
     }
     bool value(Node& out) {
