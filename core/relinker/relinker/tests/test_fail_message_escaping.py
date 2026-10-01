@@ -22,8 +22,8 @@ def module_with_dependency(name):
 def main():
     relinker = Path(sys.argv[1]).resolve()
     cases = [
-        (b"\x1b[31mred\x1b[0m/x", b"Invalid or duplicate dependency: \\x1b[31mred\\x1b[0m/x\n"),
-        (b"a/\nFAIL: forged", b"Invalid or duplicate dependency: a/\\x0aFAIL: forged\n"),
+        (b"\x1b[31mred\x1b[0m/x", b": \\x1b[31mred\\x1b[0m/x\n"),
+        (b"a/\nFAIL: forged", b": a/\\x0aFAIL: forged\n"),
     ]
     with tempfile.TemporaryDirectory(prefix="anyps5-escaping-") as directory:
         work = Path(directory)
