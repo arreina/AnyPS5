@@ -34,7 +34,7 @@ jobs:
       - run: cmake --build build --target core/relinker/all
       - run: ctest --test-dir build/core/relinker --output-on-failure --timeout 600
 
-  agc-driver:
+  libs:
     runs-on: ubuntu-latest
     timeout-minutes: 60
     env:
@@ -42,6 +42,7 @@ jobs:
       ASAN_OPTIONS: suppressions=${{ github.workspace }}/tools/asan-suppressions.txt
       ANYPS5_SHADER_CACHE_FUZZ_CASES: '200000'
       ANYPS5_RDNA_FUZZ_CASES: '100000'
+      ANYPS5_JSON_FUZZ_CASES: '100000'
     steps:
       - uses: actions/checkout@v7
         with:
@@ -50,7 +51,7 @@ jobs:
           cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo -DBUILD_TESTING=ON
           -DANYPS5_SANITIZERS=ON -DCMAKE_C_COMPILER=gcc -DCMAKE_CXX_COMPILER=g++
       - run: |
-          targets=$(ctest --test-dir build -N -R '^agc_' | python3 -c "import re, sys; print(' '.join(sorted({n if n.endswith('_tests') else n + '_tests' for n in re.findall(r'Test +#\d+: (\S+)', sys.stdin.read())})))")
+          targets=$(ctest --test-dir build -N -R '^(agc_|guest_json)' | python3 -c "import re, sys; print(' '.join(sorted({n if n.endswith('_tests') else n + '_tests' for n in re.findall(r'Test +#\d+: (\S+)', sys.stdin.read())})))")
           echo "Building $targets"
           cmake --build build --target $targets
-      - run: ctest --test-dir build -R '^agc_' --output-on-failure --timeout 1200
+      - run: ctest --test-dir build -R '^(agc_|guest_json)' --output-on-failure --timeout 1200
