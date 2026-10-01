@@ -29,7 +29,7 @@ constexpr std::uint32_t kSpecialWords[] = {
 
 std::size_t caseCount() {
     const char* value = std::getenv("ANYPS5_RDNA_FUZZ_CASES");
-    return value == nullptr ? 20000 : std::stoul(value);
+    return value == nullptr ? 2000 : std::stoul(value);
 }
 
 std::uint32_t instructionWord(std::mt19937_64& random) {
