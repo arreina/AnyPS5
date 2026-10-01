@@ -38,6 +38,9 @@ std::uint32_t instructionWord(std::mt19937_64& random) {
     const auto mask = 0xffffffffu >> prefixBits;
     auto word = prefix | (static_cast<std::uint32_t>(random()) & mask);
     if (prefix == 0xf8000000u && random() % 4 != 0) word &= 0xfc001fffu;
+    constexpr std::uint32_t modifierSources[] = {0xf9u, 0xfau, 0xe9u, 0xeau, 0xffu};
+    if ((prefix == 0x7c000000u || prefix == 0x7e000000u || prefix == 0u || prefix == 0x40000000u) && random() % 4 == 0)
+        word = (word & ~0x1ffu) | modifierSources[random() % std::size(modifierSources)];
     return word;
 }
 
