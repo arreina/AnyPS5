@@ -29,7 +29,7 @@ jobs:
       - run: cmake -S . -B build $CONFIGURE
       - run: cmake --build build
       - run: >-
-          cppcheck --project=build/compile_commands.json --file-filter='*/core/*'
+          cppcheck --project=build/compile_commands.json --file-filter='core/*'
           --suppress='*:*/3rdparty/*' --suppress=missingIncludeSystem --inline-suppr
           --enable=warning,portability,performance --inconclusive -j "$(nproc)"
           --template='{file}:{line}: {severity}: {id}: {message}' 2> cppcheck.txt || true
