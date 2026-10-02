@@ -601,6 +601,31 @@ bool IsImageOpcode(RdnaOpcode opcode) {
     requireClassifiableOpcode(opcode);
     switch (opcode) {
         case RdnaOpcode::ImageSample:
+        case RdnaOpcode::ImageSampleBCl:
+        case RdnaOpcode::ImageSampleBClO:
+        case RdnaOpcode::ImageSampleBO:
+        case RdnaOpcode::ImageSampleC:
+        case RdnaOpcode::ImageSampleCB:
+        case RdnaOpcode::ImageSampleCBCl:
+        case RdnaOpcode::ImageSampleCBClO:
+        case RdnaOpcode::ImageSampleCBO:
+        case RdnaOpcode::ImageSampleCCl:
+        case RdnaOpcode::ImageSampleCClO:
+        case RdnaOpcode::ImageSampleCD:
+        case RdnaOpcode::ImageSampleCDCl:
+        case RdnaOpcode::ImageSampleCDClO:
+        case RdnaOpcode::ImageSampleCDO:
+        case RdnaOpcode::ImageSampleCL:
+        case RdnaOpcode::ImageSampleCLzO:
+        case RdnaOpcode::ImageSampleCLO:
+        case RdnaOpcode::ImageSampleCO:
+        case RdnaOpcode::ImageSampleCl:
+        case RdnaOpcode::ImageSampleClO:
+        case RdnaOpcode::ImageSampleD:
+        case RdnaOpcode::ImageSampleDCl:
+        case RdnaOpcode::ImageSampleDO:
+        case RdnaOpcode::ImageSampleLzO:
+        case RdnaOpcode::ImageSampleO:
         case RdnaOpcode::ImageSampleLz:
         case RdnaOpcode::ImageLoad:
         case RdnaOpcode::ImageStore:
@@ -622,6 +647,24 @@ bool IsImageOpcode(RdnaOpcode opcode) {
         case RdnaOpcode::ImageGather4CO:
         case RdnaOpcode::ImageGather4CLzO:
         case RdnaOpcode::ImageGather4h:
+        case RdnaOpcode::ImageGather4:
+        case RdnaOpcode::ImageGather4B:
+        case RdnaOpcode::ImageGather4BCl:
+        case RdnaOpcode::ImageGather4BClO:
+        case RdnaOpcode::ImageGather4BO:
+        case RdnaOpcode::ImageGather4Cl:
+        case RdnaOpcode::ImageGather4ClO:
+        case RdnaOpcode::ImageGather4CB:
+        case RdnaOpcode::ImageGather4CBCl:
+        case RdnaOpcode::ImageGather4CBClO:
+        case RdnaOpcode::ImageGather4CBO:
+        case RdnaOpcode::ImageGather4CCl:
+        case RdnaOpcode::ImageGather4CClO:
+        case RdnaOpcode::ImageGather4CL:
+        case RdnaOpcode::ImageGather4CLO:
+        case RdnaOpcode::ImageGather4L:
+        case RdnaOpcode::ImageGather4LO:
+        case RdnaOpcode::ImageGather4O:
         case RdnaOpcode::ImageBvhIntersectRay:
             return true;
         default:

@@ -1406,6 +1406,34 @@ struct ContentExportInitParam2 {
 
 struct ContentSearchInitParam { std::size_t memory_size; };
 
+struct PngEncCreateParam {
+    std::uint32_t this_size;
+    std::uint32_t attribute;
+    std::uint32_t max_image_width;
+    std::uint32_t max_filter_number;
+};
+
+struct PngEncEncodeParam {
+    const std::uint8_t* image_mem_addr;
+    std::uint8_t* png_mem_addr;
+    std::uint32_t image_mem_size;
+    std::uint32_t png_mem_size;
+    std::uint32_t image_width;
+    std::uint32_t image_height;
+    std::uint32_t image_pitch;
+    std::uint16_t pixel_format;
+    std::uint16_t color_space;
+    std::uint16_t bit_depth;
+    std::uint16_t clut_number;
+    std::uint16_t filter_type;
+    std::uint16_t compression_level;
+};
+
+struct PngEncOutputInfo {
+    std::uint32_t data_size;
+    std::uint32_t processed_height;
+};
+
 struct ContentDeleteInitParam {
     char reserved1[4];
     std::size_t heap_size;
