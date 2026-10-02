@@ -27,6 +27,8 @@ void* APS5_VABI mmap_nid_postfix(void*, std::size_t, int, int, int, std::int64_t
 int APS5_VABI munmap_nid_postfix(void*, std::size_t) noexcept;
 int* APS5_VABI __error_nid_postfix();
 int APS5_VABI sceKernelMapNamedFlexibleMemory(void**, std::size_t, int, int, const char*);
+int APS5_VABI sceKernelMapNamedFlexibleMemoryInternal(void**, std::size_t, int, int, const char*);
+int APS5_VABI sceKernelAvailableFlexibleMemorySize(std::size_t*);
 int APS5_VABI sceKernelMapFlexibleMemory(void**, std::size_t, int, int);
 int APS5_VABI sceKernelMunmap(void*, std::size_t);
 int APS5_VABI sceKernelMprotect(const void*, std::size_t, int);
@@ -65,17 +67,39 @@ static void CheckNamedAndHintedMappings() {
     Require(sceKernelClearVirtualRangeName(first, length) == 0);
     Require(NameAt(middle)[0] == '\0');
     Require(sceKernelSetVirtualRangeName(nullptr, length, "x") != 0);
-#if defined(__linux__)
     void* hinted = first;
     Require(sceKernelMapFlexibleMemory(&hinted, length, 3, 0) == 0);
     Require(hinted > first && (reinterpret_cast<std::uintptr_t>(hinted) & 0x3fff) == 0);
+    static_cast<volatile unsigned char*>(hinted)[length - 1] = 1;
     bool rejected = false;
     void* overwrite = first;
     try { sceKernelMapFlexibleMemory(&overwrite, 0x4000, 3, 0x90); } catch (const std::exception&) { rejected = true; }
     Require(rejected && overwrite == first);
     Require(sceKernelMunmap(hinted, length) == 0);
-#endif
+    void* exclusive = hinted;
+    Require(sceKernelMapFlexibleMemory(&exclusive, length, 3, 0x90) == 0);
+    Require(exclusive == hinted);
+    static_cast<volatile unsigned char*>(exclusive)[0] = 1;
+    Require(sceKernelMunmap(exclusive, length) == 0);
     Require(sceKernelMunmap(first, length) == 0);
+}
+
+static void CheckInternalNamedFlexibleMapping() {
+    constexpr std::size_t length = 0x10000;
+    std::size_t before = 0;
+    std::size_t available = 0;
+    Require(sceKernelAvailableFlexibleMemorySize(&before) == 0);
+    void* mapped = nullptr;
+    Require(sceKernelMapNamedFlexibleMemoryInternal(&mapped, length, 3, 0, "internal mapping") == 0 && mapped != nullptr);
+    Require(std::strcmp(NameAt(mapped), "internal mapping") == 0);
+    Require(sceKernelAvailableFlexibleMemorySize(&available) == 0 && available == before - length);
+    Require(sceKernelMunmap(mapped, length) == 0);
+    Require(sceKernelAvailableFlexibleMemorySize(&available) == 0 && available == before);
+    bool rejected = false;
+    void* unknown = nullptr;
+    try { sceKernelMapNamedFlexibleMemoryInternal(&unknown, length, 3, 0x8000, "internal mapping"); } catch (const std::exception&) { rejected = true; }
+    Require(rejected && unknown == nullptr);
+    Require(sceKernelAvailableFlexibleMemorySize(&available) == 0 && available == before);
 }
 
 static void CheckDirectMemoryFollowsPhysicalPages() {
@@ -452,6 +476,7 @@ static void CheckDirectMemoryWriteWatch() {
 
 int main() {
     CheckNamedAndHintedMappings();
+    CheckInternalNamedFlexibleMapping();
     CheckDirectMemoryFollowsPhysicalPages();
     CheckFixedVirtualReservation();
     CheckSharedDirectMemoryLifecycle();

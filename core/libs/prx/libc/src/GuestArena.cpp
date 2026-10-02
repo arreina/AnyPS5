@@ -44,15 +44,23 @@ public:
     }
 
     void* Allocate(std::size_t bytes, std::size_t alignment) {
+        return AllocateAtOrAbove(0, bytes, alignment);
+    }
+
+    void* AllocateAtOrAbove(std::uintptr_t hint, std::size_t bytes, std::size_t alignment) {
         if (_base == 0) throw std::runtime_error("guest address space arena is unavailable");
         if (alignment == 0 || (alignment & (alignment - 1)) != 0) throw std::invalid_argument("invalid guest arena alignment");
         std::lock_guard lock(_lock);
-        std::uintptr_t candidate = alignUp(_base, alignment);
-        for (const auto& [start, end] : _used) {
-            if (candidate + bytes <= start) break;
+        if (hint >= _end) throw std::runtime_error("mapping address hint is above the guest address space arena");
+        std::uintptr_t candidate = alignUp(std::max(_base, hint), alignment);
+        auto it = _used.upper_bound(candidate);
+        if (it != _used.begin() && std::prev(it)->second > candidate) --it;
+        for (; it != _used.end(); ++it) {
+            const auto& [start, end] = *it;
+            if (candidate <= _end && bytes <= _end - candidate && candidate + bytes <= start) break;
             candidate = std::max(candidate, alignUp(end, alignment));
         }
-        if (bytes > _end - candidate) throw std::runtime_error("guest address space arena exhausted");
+        if (candidate > _end || bytes > _end - candidate) throw std::runtime_error("guest address space arena exhausted");
         _used.emplace(candidate, candidate + bytes);
         return reinterpret_cast<void*>(candidate);
     }
@@ -131,6 +139,10 @@ bool GuestArenaContains_nid_postfix(const void* pointer, std::size_t bytes) {
 
 void* GuestArenaAllocate_nid_postfix(std::size_t bytes, std::size_t alignment) {
     return Arena::Get().Allocate(bytes, alignment);
+}
+
+void* GuestArenaAllocateAtOrAbove_nid_postfix(std::uintptr_t hint, std::size_t bytes, std::size_t alignment) {
+    return Arena::Get().AllocateAtOrAbove(hint, bytes, alignment);
 }
 
 void GuestArenaMarkUsed_nid_postfix(const void* pointer, std::size_t bytes) {

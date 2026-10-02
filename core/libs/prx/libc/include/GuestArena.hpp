@@ -13,6 +13,7 @@ extern "C" {
 bool GuestArenaAvailable_nid_postfix();
 bool GuestArenaContains_nid_postfix(const void* pointer, std::size_t bytes);
 void* GuestArenaAllocate_nid_postfix(std::size_t bytes, std::size_t alignment);
+void* GuestArenaAllocateAtOrAbove_nid_postfix(std::uintptr_t hint, std::size_t bytes, std::size_t alignment);
 void GuestArenaMarkUsed_nid_postfix(const void* pointer, std::size_t bytes);
 void GuestArenaRelease_nid_postfix(const void* pointer, std::size_t bytes);
 // The reserved range, and whether it was reserved with page write watching (Windows MEM_WRITE_WATCH).

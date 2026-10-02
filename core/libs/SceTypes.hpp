@@ -1468,6 +1468,35 @@ struct JpegEncOutputInfo {
     std::uint32_t height;
 };
 
+struct JpegDecCreateParam {
+    std::uint32_t size;
+    std::uint32_t attribute;
+};
+
+struct JpegDecParseParam {
+    const void* jpeg_mem_addr;
+    std::uint32_t jpeg_mem_size;
+    std::uint32_t reserved0;
+};
+
+struct JpegDecDecodeParam {
+    const void* jpeg_mem_addr;
+    void* image_mem_addr;
+    std::uint32_t jpeg_mem_size;
+    std::uint32_t image_mem_size;
+    std::uint16_t pixel_format;
+    std::uint16_t reserved0;
+    std::uint32_t image_pitch;
+};
+
+struct JpegDecImageInfo {
+    std::uint32_t image_width;
+    std::uint32_t image_height;
+    std::uint16_t color_space;
+    std::uint16_t bit_depth;
+    std::uint32_t image_flag;
+};
+
 struct PlayGoInitParams {
     const void* buf_addr;
     std::uint32_t buf_size;
