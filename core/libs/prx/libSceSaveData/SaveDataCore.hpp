@@ -1275,7 +1275,7 @@ int get_local_storage_app_status_internal(const SceSaveDataDirName* dir_name,
                                           const SceSaveDataTitleId* title_id,
                                           std::uint32_t* status) {
     if (status == nullptr || dir_name == nullptr ||
-        !bounded_string_ok(dir_name->data, sizeof(dir_name->data)) ||
+        !bounded_string_ok(dir_name->data, sizeof(dir_name->data)) || !valid_dir_name(dir_name->data) ||
         (title_id != nullptr && !bounded_string_ok(title_id->data, sizeof(title_id->data)))) {
         return SD_ERROR_PARAMETER;
     }
@@ -1306,7 +1306,7 @@ int get_local_storage_app_status_internal(const SceSaveDataDirName* dir_name,
 int set_local_storage_app_status_internal(const SceSaveDataDirName* dir_name,
                                           const SceSaveDataTitleId* title_id,
                                           std::uint32_t status) {
-    if (dir_name == nullptr || !bounded_string_ok(dir_name->data, sizeof(dir_name->data)) ||
+    if (dir_name == nullptr || !bounded_string_ok(dir_name->data, sizeof(dir_name->data)) || !valid_dir_name(dir_name->data) ||
         (title_id != nullptr && !bounded_string_ok(title_id->data, sizeof(title_id->data))) ||
         (status & ~(SD_APP_STATUS_DELETED | SD_APP_STATUS_LOCAL | SD_APP_STATUS_ONLINE)) != 0) {
         return SD_ERROR_PARAMETER;
@@ -1322,7 +1322,7 @@ int set_local_storage_app_status_internal(const SceSaveDataDirName* dir_name,
 
 int delete_local_storage_app_status_internal(const SceSaveDataDirName* dir_name,
                                              const SceSaveDataTitleId* title_id) {
-    if (dir_name == nullptr || !bounded_string_ok(dir_name->data, sizeof(dir_name->data)) ||
+    if (dir_name == nullptr || !bounded_string_ok(dir_name->data, sizeof(dir_name->data)) || !valid_dir_name(dir_name->data) ||
         (title_id != nullptr && !bounded_string_ok(title_id->data, sizeof(title_id->data)))) {
         return SD_ERROR_PARAMETER;
     }
