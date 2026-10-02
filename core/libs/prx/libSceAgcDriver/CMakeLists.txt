@@ -239,6 +239,12 @@ target_link_libraries(agc_shader_control_flow_tests PRIVATE shader_recompiler_ag
 set_target_properties(agc_shader_control_flow_tests PROPERTIES CXX_EXTENSIONS OFF)
 configure_windows_unwind(agc_shader_control_flow_tests)
 
+add_test_executable(agc_recompiler_fuzz_tests EXCLUDE_FROM_ALL tests/RecompilerFuzz.cpp)
+target_include_directories(agc_recompiler_fuzz_tests PRIVATE ${LIBS_INCLUDE_DIR} ${CMAKE_SOURCE_DIR}/3rdparty/SPIRV-Headers/include)
+target_link_libraries(agc_recompiler_fuzz_tests PRIVATE shader_recompiler_agc_driver libc)
+set_target_properties(agc_recompiler_fuzz_tests PROPERTIES CXX_EXTENSIONS OFF)
+configure_windows_unwind(agc_recompiler_fuzz_tests)
+
 add_test_executable(agc_rdna_decoder_fuzz_tests EXCLUDE_FROM_ALL tests/RdnaDecoderFuzz.cpp)
 target_include_directories(agc_rdna_decoder_fuzz_tests PRIVATE ${LIBS_INCLUDE_DIR})
 target_link_libraries(agc_rdna_decoder_fuzz_tests PRIVATE shader_recompiler_agc_driver libc)
@@ -422,7 +428,7 @@ foreach(agcExecutionTestSource IN LISTS agcExecutionTestSources)
 endforeach()
 
 if(BUILD_TESTING)
-    foreach(agcTest IN ITEMS agc_driver_tests agc_shader_memory_tests agc_structurizer_tests agc_dpp_write_tests agc_rdna_truncated_modifier_tests agc_shader_disk_cache_tests agc_shader_control_flow_tests agc_rdna_decoder_fuzz_tests agc_driver_flip_tests agc_driver_pm4_tests agc_driver_graphics_tests)
+    foreach(agcTest IN ITEMS agc_driver_tests agc_shader_memory_tests agc_structurizer_tests agc_dpp_write_tests agc_rdna_truncated_modifier_tests agc_shader_disk_cache_tests agc_shader_control_flow_tests agc_rdna_decoder_fuzz_tests agc_recompiler_fuzz_tests agc_driver_flip_tests agc_driver_pm4_tests agc_driver_graphics_tests)
         string(REGEX REPLACE "_tests$" "" agcTestName "${agcTest}")
         set_target_properties(${agcTest} PROPERTIES EXCLUDE_FROM_ALL OFF)
         add_test(NAME ${agcTestName} COMMAND ${agcTest})
