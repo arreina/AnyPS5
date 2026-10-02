@@ -49,7 +49,41 @@ constexpr std::uint32_t CacheControlCode[] = {
     0xbf8c3f70, 0xbfa80001, 0x4a080881, 0xbf950001, 0xe0702000, 0x80010401, 0xbf810000,
 };
 
-constexpr std::span<const std::uint32_t> kSeeds[] = {AliasCode, MixCode, SdwaCode, CacheControlCode};
+alignas(256) constexpr std::uint32_t ProgramCounterVertexCode[] = {
+    0xbe801f00u, 0x800000ffu, 52u, 0x82010180u, 0xb0020010u, 0xbe8303ffu, 0x10005004u, 0xf4200100u,
+    0xfa000000u, 0xbf8cc07fu, 0x7e000204u, 0xf80008cfu, 0u, 0xbf810000u, 0x3f800000u,
+};
+constexpr std::uint32_t InterpolatedPixelCode[] = {
+    0xc8100000u, 0xc8110001u, 0xc8140402u, 0xc8150403u, 0xf800180fu, 0x05040504u, 0xbf810000u, 0xbf810000u,
+};
+constexpr std::uint32_t ExportPixelCode[] = {0xf800180fu, 0x01010101u, 0xbf810000u};
+
+struct Seed {
+    std::span<const std::uint32_t> code;
+    ShaderRecompiler::ShaderStage stage;
+};
+
+constexpr Seed kSeeds[] = {
+    {AliasCode, ShaderRecompiler::ShaderStage::Compute},
+    {MixCode, ShaderRecompiler::ShaderStage::Compute},
+    {SdwaCode, ShaderRecompiler::ShaderStage::Compute},
+    {CacheControlCode, ShaderRecompiler::ShaderStage::Compute},
+    {ProgramCounterVertexCode, ShaderRecompiler::ShaderStage::Vertex},
+    {InterpolatedPixelCode, ShaderRecompiler::ShaderStage::Fragment},
+    {ExportPixelCode, ShaderRecompiler::ShaderStage::Fragment},
+};
+
+ShaderRecompiler::ShaderPixelStageInfo pixelStage() {
+    ShaderRecompiler::ShaderPixelStageInfo pixel{};
+    pixel.interpolatorCount = 2;
+    pixel.interpolatorSettings[1] = 1;
+    pixel.inputAddr = 0x22;
+    pixel.hasPerspectiveCenterVgpr = true;
+    pixel.noPerspective = true;
+    pixel.targetOutputMode[0] = 9;
+    pixel.targetExportMapping.fill(0xe4u);
+    return pixel;
+}
 
 constexpr std::uint32_t kInstructionPrefixes[] = {
     0x80000000u, 0xb0000000u, 0xbe800000u, 0xbf000000u, 0xbf800000u, 0xf4000000u, 0x7c000000u, 0x7e000000u,
@@ -110,26 +144,42 @@ int main() {
     std::copy(out.begin(), out.end(), userData.begin() + 4);
     const SpirvTarget target{0x00401000u, 0x00010300u, 32, BdaAbi::Version, kCapabilities, kExtensions, false, {1024, 1024, 64}, 1024, 32768, {}, {}};
     const ShaderComputeStageInfo compute{{kThreads, 1, 1}, 0, {false, false, false}, false, 1};
+    const SpirvTarget graphicsTarget{0x00401000u, 0x00010300u, 64, BdaAbi::Version, kCapabilities, kExtensions, false, {1024, 1024, 64}, 1024, 32768, {}, {}};
+    const auto pixel = pixelStage();
     std::mt19937_64 random(20261002);
     const auto cases = caseCount();
     std::size_t compiled = 0;
     std::size_t invalid = 0;
-    for (std::size_t index = 0; index <= cases; ++index) {
-        const auto seed = kSeeds[random() % std::size(kSeeds)];
-        std::vector<std::uint32_t> code(seed.begin(), seed.end());
-        if (index != 0) mutate(random, code);
+    std::size_t seedsCompiled = 0;
+    for (std::size_t index = 0; index < std::size(kSeeds) + cases; ++index) {
+        const auto& seed = kSeeds[index < std::size(kSeeds) ? index : random() % std::size(kSeeds)];
+        std::vector<std::uint32_t> code(seed.code.begin(), seed.code.end());
+        if (index >= std::size(kSeeds)) mutate(random, code);
         const std::span<const std::uint32_t> span(code);
         const std::array<MemoryRegion, 1> memory{{reinterpret_cast<std::uintptr_t>(span.data()), std::as_bytes(span)}};
         RecompileRequest request{
-            {ShaderStage::Compute, reinterpret_cast<std::uintptr_t>(span.data()), span, 0, {}},
+            {seed.stage, reinterpret_cast<std::uintptr_t>(span.data()), span, 0, {}},
             {32, 0, userData, compute, std::nullopt, std::nullopt, memory},
             target,
             {0, 0, 0, 128}
         };
+        if (seed.stage != ShaderStage::Compute) {
+            request.context = {};
+            request.context.waveSize = 64;
+            request.context.memory = memory;
+            request.target = graphicsTarget;
+            if (seed.stage == ShaderStage::Vertex) {
+                request.context.userDataBaseRegister = 8;
+                request.context.vertex = ShaderVertexStageInfo{};
+            } else {
+                request.context.pixel = pixel;
+            }
+        }
         request.useCache = false;
         try {
             static_cast<void>(Recompile(request));
-            ++compiled;
+            if (index < std::size(kSeeds)) ++seedsCompiled;
+            else ++compiled;
         } catch (const std::exception& error) {
             if (std::string_view(error.what()).find("SPIR-V validation") != std::string_view::npos) {
                 ++invalid;
@@ -137,6 +187,6 @@ int main() {
             }
         }
     }
-    std::printf("recompiler fuzz: %zu cases, %zu compiled, %zu invalid SPIR-V\n", cases, compiled, invalid);
-    return invalid == 0 ? 0 : 1;
+    std::printf("recompiler fuzz: %zu/%zu seeds compiled, %zu cases, %zu compiled, %zu invalid SPIR-V\n", seedsCompiled, std::size(kSeeds), cases, compiled, invalid);
+    return invalid == 0 && seedsCompiled == std::size(kSeeds) ? 0 : 1;
 }
