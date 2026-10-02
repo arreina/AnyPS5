@@ -56,14 +56,29 @@ bool IsScalarAluOpcode(RdnaOpcode opcode) {
         case RdnaOpcode::SBitreplicateB64B32:
         case RdnaOpcode::SQuadmaskB64:
         case RdnaOpcode::SAndSaveexecB32:
+        case RdnaOpcode::SOrSaveexecB32:
+        case RdnaOpcode::SXorSaveexecB32:
+        case RdnaOpcode::SAndn2SaveexecB32:
         case RdnaOpcode::SOrn2SaveexecB32:
+        case RdnaOpcode::SNandSaveexecB32:
+        case RdnaOpcode::SNorSaveexecB32:
+        case RdnaOpcode::SXnorSaveexecB32:
         case RdnaOpcode::SAndn1SaveexecB32:
+        case RdnaOpcode::SOrn1SaveexecB32:
+        case RdnaOpcode::SAndn1WrexecB32:
+        case RdnaOpcode::SAndn2WrexecB32:
         case RdnaOpcode::SAndSaveexecB64:
         case RdnaOpcode::SOrSaveexecB64:
         case RdnaOpcode::SXorSaveexecB64:
         case RdnaOpcode::SAndn2SaveexecB64:
         case RdnaOpcode::SOrn2SaveexecB64:
+        case RdnaOpcode::SNandSaveexecB64:
+        case RdnaOpcode::SNorSaveexecB64:
+        case RdnaOpcode::SXnorSaveexecB64:
         case RdnaOpcode::SAndn1SaveexecB64:
+        case RdnaOpcode::SOrn1SaveexecB64:
+        case RdnaOpcode::SAndn1WrexecB64:
+        case RdnaOpcode::SAndn2WrexecB64:
         case RdnaOpcode::SNotB32:
         case RdnaOpcode::SNotB64:
         case RdnaOpcode::SWqmB32:

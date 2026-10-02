@@ -166,9 +166,14 @@ constexpr VectorOpcodeInfo vop3EncodedVop1Opcodes[] = {
     {0x07u, RdnaOpcode::VCvtU32F32},
     {0x08u, RdnaOpcode::VCvtI32F32},
     {0x0au, RdnaOpcode::VCvtF16F32},
+    {0x0bu, RdnaOpcode::VCvtF32F16},
     {0x0cu, RdnaOpcode::VCvtRpiI32F32},
     {0x0du, RdnaOpcode::VCvtFlrI32F32},
     {0x0eu, RdnaOpcode::VCvtOffF32I4},
+    {0x11u, RdnaOpcode::VCvtF32Ubyte0},
+    {0x12u, RdnaOpcode::VCvtF32Ubyte1},
+    {0x13u, RdnaOpcode::VCvtF32Ubyte2},
+    {0x14u, RdnaOpcode::VCvtF32Ubyte3},
     {0x2au, RdnaOpcode::VRcpF32},
     {0x20u, RdnaOpcode::VFractF32},
     {0x21u, RdnaOpcode::VTruncF32},
@@ -447,7 +452,7 @@ bool isVop2LiteralMadOpcode(std::uint32_t opcode) {
 }
 
 bool isUnsupportedVop3EncodedVop2Alias(std::uint32_t opcode) {
-    return isVop2LiteralMadOpcode(opcode) || opcode == 0x02u || opcode == 0x39u || opcode == 0x3au;
+    return isVop2LiteralMadOpcode(opcode) || opcode == 0x02u;
 }
 
 bool isVop3EncodedVopc(std::uint32_t opcode) {
@@ -1369,6 +1374,12 @@ bool supportsNativeVop3SourceModifiers(RdnaOpcode opcode) {
         case RdnaOpcode::VMulF32:
         case RdnaOpcode::VMinF32:
         case RdnaOpcode::VMaxF32:
+        case RdnaOpcode::VAddF16:
+        case RdnaOpcode::VSubF16:
+        case RdnaOpcode::VSubrevF16:
+        case RdnaOpcode::VMulF16:
+        case RdnaOpcode::VMinF16:
+        case RdnaOpcode::VMaxF16:
         case RdnaOpcode::VMacF32:
         case RdnaOpcode::VMadF32:
         case RdnaOpcode::VFmaF32:
