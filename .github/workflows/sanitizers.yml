@@ -55,3 +55,21 @@ jobs:
           echo "Building $targets"
           cmake --build build --target $targets
       - run: ctest --test-dir build -R '^(agc_|guest_json)' --output-on-failure --timeout 1200
+
+  recompiler-spirv:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1
+      ASAN_OPTIONS: detect_leaks=0:suppressions=${{ github.workspace }}/tools/asan-suppressions.txt
+      ANYPS5_NO_SHADER_CACHE: '1'
+      ANYPS5_RECOMPILER_FUZZ_CASES: '3000'
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: true
+      - run: >-
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo -DBUILD_TESTING=ON
+          -DANYPS5_SANITIZERS=ON -DANYPS5_ENABLE_SPIRV_TOOLS=ON -DCMAKE_C_COMPILER=gcc -DCMAKE_CXX_COMPILER=g++
+      - run: cmake --build build --target agc_recompiler_fuzz_tests agc_pixel_position_export_tests agc_pixel_lds_atomic_tests
+      - run: ctest --test-dir build -R '^agc_(recompiler_fuzz|pixel_position_export|pixel_lds_atomic)$' --output-on-failure --timeout 2400
