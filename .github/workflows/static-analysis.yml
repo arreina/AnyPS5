@@ -1,0 +1,69 @@
+name: Static analysis
+
+on:
+  schedule:
+    - cron: '0 3 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: static-analysis-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CONFIGURE: >-
+    -G Ninja -DCMAKE_BUILD_TYPE=Debug -DBUILD_TESTING=ON -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+    -DCMAKE_C_COMPILER=gcc -DCMAKE_CXX_COMPILER=g++
+
+jobs:
+  cppcheck:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: true
+      - run: sudo apt-get update && sudo apt-get install -y cppcheck
+      - run: cmake -S . -B build $CONFIGURE
+      - run: cmake --build build
+      - run: >-
+          cppcheck --project=build/compile_commands.json --file-filter='*/core/*'
+          --suppress='*:*/3rdparty/*' --suppress=missingIncludeSystem --inline-suppr
+          --enable=warning,portability,performance --inconclusive -j "$(nproc)"
+          --template='{file}:{line}: {severity}: {id}: {message}' 2> cppcheck.txt || true
+      - run: |
+          echo "### cppcheck" >> "$GITHUB_STEP_SUMMARY"
+          echo "$(wc -l < cppcheck.txt) findings" >> "$GITHUB_STEP_SUMMARY"
+          awk -F': ' '{print $3}' cppcheck.txt | sort | uniq -c | sort -rn | head -30 | sed 's/^/    /' >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: cppcheck
+          path: cppcheck.txt
+
+  clang-tidy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: true
+      - run: sudo apt-get update && sudo apt-get install -y clang-tidy
+      - run: cmake -S . -B build $CONFIGURE
+      - run: cmake --build build
+      - run: >-
+          run-clang-tidy -p build -j "$(nproc)" -quiet
+          -checks='-*,clang-analyzer-*,bugprone-*,-bugprone-easily-swappable-parameters,-bugprone-narrowing-conversions,-bugprone-reserved-identifier,-bugprone-macro-parentheses,-bugprone-branch-clone,-clang-analyzer-optin.*'
+          '^((?!3rdparty).)*/core/.*\.cpp$' > clang-tidy.txt 2>&1 || true
+      - run: |
+          grep -E '^/.*: (warning|error): ' clang-tidy.txt | sort -u > clang-tidy-findings.txt || true
+          echo "### clang-tidy" >> "$GITHUB_STEP_SUMMARY"
+          echo "$(wc -l < clang-tidy-findings.txt) findings" >> "$GITHUB_STEP_SUMMARY"
+          grep -oE '\[[a-z0-9.,-]+\]$' clang-tidy-findings.txt | sort | uniq -c | sort -rn | head -30 | sed 's/^/    /' >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: clang-tidy
+          path: |
+            clang-tidy.txt
+            clang-tidy-findings.txt
