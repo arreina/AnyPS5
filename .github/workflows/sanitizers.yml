@@ -43,6 +43,7 @@ jobs:
       ANYPS5_SHADER_CACHE_FUZZ_CASES: '200000'
       ANYPS5_RDNA_FUZZ_CASES: '100000'
       ANYPS5_JSON_FUZZ_CASES: '100000'
+      ANYPS5_PM4_FUZZ_CASES: '2000000'
     steps:
       - uses: actions/checkout@v7
         with:
