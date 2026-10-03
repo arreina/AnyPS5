@@ -38,12 +38,13 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 60
     env:
-      UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1
+      UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1:suppressions=${{ github.workspace }}/tools/ubsan-suppressions.txt
       ASAN_OPTIONS: suppressions=${{ github.workspace }}/tools/asan-suppressions.txt
       ANYPS5_SHADER_CACHE_FUZZ_CASES: '200000'
       ANYPS5_RDNA_FUZZ_CASES: '100000'
       ANYPS5_JSON_FUZZ_CASES: '100000'
       ANYPS5_PM4_FUZZ_CASES: '2000000'
+      ANYPS5_ATRAC9_FUZZ_CASES: '2000000'
     steps:
       - uses: actions/checkout@v7
         with:
@@ -52,10 +53,10 @@ jobs:
           cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo -DBUILD_TESTING=ON
           -DANYPS5_SANITIZERS=ON -DCMAKE_C_COMPILER=gcc -DCMAKE_CXX_COMPILER=g++
       - run: |
-          targets=$(ctest --test-dir build -N -R '^(agc_|guest_json)' | python3 -c "import re, sys; print(' '.join(sorted({n if n.endswith('_tests') else n + '_tests' for n in re.findall(r'Test +#\d+: (\S+)', sys.stdin.read())})))")
+          targets=$(ctest --test-dir build -N -R '^(agc_|guest_json|guest_ajm|guest_audiodec|ngs2_)' | python3 -c "import re, sys; print(' '.join(sorted({n if n.endswith('_tests') else n + '_tests' for n in re.findall(r'Test +#\d+: (\S+)', sys.stdin.read())})))")
           echo "Building $targets"
           cmake --build build --target $targets
-      - run: ctest --test-dir build -R '^(agc_|guest_json)' --output-on-failure --timeout 1200
+      - run: ctest --test-dir build -R '^(agc_|guest_json|guest_ajm|guest_audiodec|ngs2_)' --output-on-failure --timeout 1200
 
   recompiler-spirv:
     runs-on: ubuntu-latest
