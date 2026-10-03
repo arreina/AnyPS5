@@ -1,0 +1,2 @@
+shift-base:3rdparty/LibAtrac9/C/src/utility.c
+shift-exponent:3rdparty/LibAtrac9/C/src/utility.c
