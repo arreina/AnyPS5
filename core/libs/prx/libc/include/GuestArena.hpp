@@ -30,8 +30,26 @@ void GuestArenaMap_nid_postfix(void* pointer, std::size_t bytes, void* section, 
 void* GuestArenaMapAlias_nid_postfix(std::uintptr_t address, std::size_t bytes);
 void GuestArenaUnmapAlias_nid_postfix(void* alias);
 #endif
+bool GuestArenaBeginHostWrite_nid_postfix(void* pointer, std::size_t bytes);
+void GuestArenaEndHostWrite_nid_postfix(void* pointer, std::size_t bytes);
 
 }
+
+class HostWrite {
+public:
+    HostWrite(void* pointer, std::size_t bytes) : pointer(pointer), bytes(bytes), open(GuestArenaBeginHostWrite_nid_postfix(pointer, bytes)) {}
+    ~HostWrite() {
+        if (open) GuestArenaEndHostWrite_nid_postfix(pointer, bytes);
+    }
+    HostWrite(const HostWrite&) = delete;
+    HostWrite& operator=(const HostWrite&) = delete;
+    bool Open() const { return open; }
+
+private:
+    void* pointer;
+    std::size_t bytes;
+    bool open;
+};
 
 }
 
