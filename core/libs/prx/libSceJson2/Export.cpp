@@ -372,7 +372,9 @@ private:
             }
         }
         const double real = std::strtod(text.c_str(), nullptr);
-        if (!std::isfinite(real)) return false;
+        // RFC 8259 lets a parser accept or reject an out-of-range number, and Sony's choice is not verified yet.
+        if (!std::isfinite(real))
+            throw std::overflow_error("sce::Json::Parser::parse: number " + text + " overflows a double; the system library's behaviour for it is not verified");
         out.type = TypeReal;
         out.real = real;
         return true;
@@ -734,7 +736,14 @@ int APS5_VABI _ZN3sce4Json6Parser5parseERNS0_5ValueEPKcm(Value* out, const char*
     if (text == nullptr) throw std::invalid_argument("sce::Json::Parser::parse: null text");
     Node parsed{};
     Parser parser(text, size);
-    if (!parser.Parse(parsed)) {
+    bool ok = false;
+    try {
+        ok = parser.Parse(parsed);
+    } catch (...) {
+        Clear(parsed);
+        throw;
+    }
+    if (!ok) {
         Clear(parsed);
         return JsonErrorParse;
     }

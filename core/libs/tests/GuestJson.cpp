@@ -5,6 +5,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <limits>
+#include <stdexcept>
 #include <string>
 #include <vector>
 
@@ -163,8 +164,15 @@ static void ParseAndRoundTrip() {
     Require(Serialize(reparsed) == serialized);
     _ZN3sce4Json5ValueD1Ev(&reparsed);
 
-    for (const char* invalid : {"{\"a\":}", "[1,]", "\"open", "tru", "{} x", "01", "1e309", "[-1e309]", "{\"a\":1e400}"}) {
+    for (const char* invalid : {"{\"a\":}", "[1,]", "\"open", "tru", "{} x", "01"}) {
         Require(_ZN3sce4Json6Parser5parseERNS0_5ValueEPKcm(&root, invalid, std::strlen(invalid)) < 0);
+        Require(_ZNK3sce4Json5Value7getTypeEv(&root) == TypeObject && _ZNK3sce4Json5Value5countEv(&root) == 8);
+    }
+    for (const char* overflowing : {"1e309", "[-1e309]", "{\"a\":1e400}"}) {
+        bool rejected = false;
+        try { _ZN3sce4Json6Parser5parseERNS0_5ValueEPKcm(&root, overflowing, std::strlen(overflowing)); }
+        catch (const std::overflow_error&) { rejected = true; }
+        Require(rejected);
         Require(_ZNK3sce4Json5Value7getTypeEv(&root) == TypeObject && _ZNK3sce4Json5Value5countEv(&root) == 8);
     }
     _ZN3sce4Json5ValueD1Ev(&root);
