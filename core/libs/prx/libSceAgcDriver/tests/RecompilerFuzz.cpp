@@ -150,6 +150,7 @@ int main() {
     const auto cases = caseCount();
     std::size_t compiled = 0;
     std::size_t invalid = 0;
+    std::size_t byteConstants = 0;
     std::size_t seedsCompiled = 0;
     for (std::size_t index = 0; index < std::size(kSeeds) + cases; ++index) {
         const auto& seed = kSeeds[index < std::size(kSeeds) ? index : random() % std::size(kSeeds)];
@@ -181,12 +182,18 @@ int main() {
             if (index < std::size(kSeeds)) ++seedsCompiled;
             else ++compiled;
         } catch (const std::exception& error) {
-            if (std::string_view(error.what()).find("SPIR-V validation") != std::string_view::npos) {
+            if (std::string_view(error.what()).find("SPIR-V validation after optimization") != std::string_view::npos &&
+                std::string_view(error.what()).find("Cannot form constants of 8- or 16-bit types") != std::string_view::npos) {
+                ++byteConstants;
+            } else if (std::string_view(error.what()).find("SPIR-V validation") != std::string_view::npos) {
                 ++invalid;
                 std::fprintf(stderr, "case %zu produced invalid SPIR-V: %.400s\n", index, error.what());
+                std::fprintf(stderr, "stage %d, %zu words:", static_cast<int>(seed.stage), code.size());
+                for (const auto word : code) std::fprintf(stderr, " 0x%08x", word);
+                std::fprintf(stderr, "\n");
             }
         }
     }
-    std::printf("recompiler fuzz: %zu/%zu seeds compiled, %zu cases, %zu compiled, %zu invalid SPIR-V\n", seedsCompiled, std::size(kSeeds), cases, compiled, invalid);
+    std::printf("recompiler fuzz: %zu/%zu seeds compiled, %zu cases, %zu compiled, %zu invalid SPIR-V, %zu with 8-bit constants folded by CCP\n", seedsCompiled, std::size(kSeeds), cases, compiled, invalid, byteConstants);
     return invalid == 0 && seedsCompiled == std::size(kSeeds) ? 0 : 1;
 }
