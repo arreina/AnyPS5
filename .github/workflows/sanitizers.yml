@@ -53,7 +53,7 @@ jobs:
           cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo -DBUILD_TESTING=ON
           -DANYPS5_SANITIZERS=ON -DCMAKE_C_COMPILER=gcc -DCMAKE_CXX_COMPILER=g++
       - run: |
-          targets=$(ctest --test-dir build -N --show-only=json-v1 -R '^(agc_|guest_json|guest_ajm|guest_audiodec|ngs2_)' | python3 -c "import json, os, sys; build = os.path.realpath('build'); print(' '.join(sorted({os.path.basename(t['command'][0]) for t in json.load(sys.stdin)['tests'] if t.get('command') and os.path.realpath(t['command'][0]).startswith(build + os.sep)})))")
+          targets=$(cmake --build build --target help | grep -oE '\b[A-Za-z0-9_]+_tests\b' | grep -E '^(agc_|guest_json|guest_ajm|guest_audiodec|ngs2_)' | sort -u)
           echo "Building $targets"
           cmake --build build --target $targets
       - run: ctest --test-dir build -R '^(agc_|guest_json|guest_ajm|guest_audiodec|ngs2_)' --output-on-failure --timeout 1200
