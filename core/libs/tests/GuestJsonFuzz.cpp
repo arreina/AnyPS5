@@ -5,6 +5,7 @@
 #include <cstdlib>
 #include <memory>
 #include <random>
+#include <stdexcept>
 #include <string>
 
 struct Value { void* node; };
@@ -116,6 +117,7 @@ std::string serialize(Value& value) {
 int main() {
     const auto cases = caseCount();
     std::size_t parsed = 0;
+    std::size_t overflowed = 0;
     for (std::size_t index = 0; index < cases; ++index) {
         std::string input = generator() % 10 == 0 ? nested(500 + generator() % 30) : document(0);
         if (generator() % 2 == 0) corrupt(input);
@@ -124,7 +126,14 @@ int main() {
         buffer[input.size()] = '\0';
         Value root{};
         _ZN3sce4Json5ValueC1Ev(&root);
-        if (_ZN3sce4Json6Parser5parseERNS0_5ValueEPKcm(&root, buffer.get(), input.size()) == 0) {
+        int status = -1;
+        try {
+            status = _ZN3sce4Json6Parser5parseERNS0_5ValueEPKcm(&root, buffer.get(), input.size());
+        } catch (const std::runtime_error& error) {
+            if (std::string(error.what()).find("overflows a double") == std::string::npos) throw;
+            ++overflowed;
+        }
+        if (status == 0) {
             ++parsed;
             const auto first = serialize(root);
             Value again{};
@@ -137,6 +146,6 @@ int main() {
         }
         _ZN3sce4Json5ValueD1Ev(&root);
     }
-    std::printf("JSON fuzz tests passed (%zu cases, %zu parsed)\n", cases, parsed);
+    std::printf("JSON fuzz tests passed (%zu cases, %zu parsed, %zu overflowing numbers)\n", cases, parsed, overflowed);
     return 0;
 }
