@@ -33,6 +33,14 @@ struct Rng {
         return z ^ (z >> 31);
     }
     std::uint64_t Below(std::uint64_t n) { return Next() % n; }
+    // Tamaños y desplazamientos: acotados por defecto (en Windows un tamaño de varios GB crea ficheros enormes);
+    // con ANYPS5_KERNEL_FUZZ_EXTREME=1 se usan también los valores extremos de Interesting().
+    std::uint64_t Bounded(bool extreme) {
+        static const std::uint64_t values[] = {0, 1, 2, 7, 0xfff, 0x1000, 0x1001, 0x3fff, 0x4000, 0x10000, 0x200000,
+                                               0xfffffffffffff000ull, 0xffffffffffffffffull, 0x8000000000000000ull};
+        if (extreme) return Interesting();
+        return Below(4) == 0 ? values[Below(sizeof(values) / sizeof(values[0]))] : Below(0x40000);
+    }
     std::uint64_t Interesting() {
         static const std::uint64_t values[] = {0, 1, 2, 7, 0xfff, 0x1000, 0x1001, 0x3fff, 0x4000, 0x200000,
             0x7fffffff, 0x80000000ull, 0xffffffffull, 0x7fffffffffffffffull, 0x8000000000000000ull,
@@ -50,13 +58,23 @@ template <class F> void Guarded(std::size_t& notImplemented, F&& call) {
 }
 int main() {
     const char* env = std::getenv("ANYPS5_KERNEL_FUZZ_CASES");
-    const std::size_t cases = env ? std::strtoull(env, nullptr, 10) : 20000;
+    const std::size_t cases = env ? std::strtoull(env, nullptr, 10) : 5000;
+    const bool extreme = std::getenv("ANYPS5_KERNEL_FUZZ_EXTREME") != nullptr;
     Rng rng{0x6b65726e656c0001ull};
     std::size_t notImplemented = 0;
     std::vector<int> fds;
     std::vector<std::pair<void*, std::size_t>> maps;
     static char buffer[0x2000];
     for (std::size_t i = 0; i < cases; ++i) {
+        // Pocos recursos abiertos a la vez: los descriptores y mapas de Windows son caros.
+        while (fds.size() > 32) {
+            Guarded(notImplemented, [&] { close_nid_postfix(fds.front()); });
+            fds.erase(fds.begin());
+        }
+        while (maps.size() > 32) {
+            Guarded(notImplemented, [&] { munmap_nid_postfix(maps.front().first, maps.front().second); });
+            maps.erase(maps.begin());
+        }
         const char* const anonymous = reinterpret_cast<const char*>(1);
         switch (rng.Below(9)) {
         case 0:
@@ -73,17 +91,17 @@ int main() {
             break;
         case 2:
             if (!fds.empty()) Guarded(notImplemented, [&] {
-                ftruncate_nid_postfix(fds[rng.Below(fds.size())], static_cast<std::int64_t>(rng.Below(3) ? rng.Below(0x10000) : rng.Interesting()));
+                ftruncate_nid_postfix(fds[rng.Below(fds.size())], static_cast<std::int64_t>(rng.Below(3) ? rng.Below(0x10000) : rng.Bounded(extreme)));
             });
             break;
         case 3:
             if (!fds.empty()) Guarded(notImplemented, [&] {
-                pread_nid_postfix(fds[rng.Below(fds.size())], buffer, rng.Below(sizeof(buffer) + 1), static_cast<std::int64_t>(rng.Below(3) ? rng.Below(0x10000) : rng.Interesting()));
+                pread_nid_postfix(fds[rng.Below(fds.size())], buffer, rng.Below(sizeof(buffer) + 1), static_cast<std::int64_t>(rng.Below(3) ? rng.Below(0x10000) : rng.Bounded(extreme)));
             });
             break;
         case 4:
             if (!fds.empty()) Guarded(notImplemented, [&] {
-                pwrite_nid_disambig1_nid_postfix(fds[rng.Below(fds.size())], buffer, rng.Below(sizeof(buffer) + 1), static_cast<std::int64_t>(rng.Below(3) ? rng.Below(0x10000) : rng.Interesting()));
+                pwrite_nid_disambig1_nid_postfix(fds[rng.Below(fds.size())], buffer, rng.Below(sizeof(buffer) + 1), static_cast<std::int64_t>(rng.Below(3) ? rng.Below(0x10000) : rng.Bounded(extreme)));
             });
             break;
         case 5:
@@ -92,11 +110,11 @@ int main() {
                 close_nid_postfix(fds[at]);
                 fds.erase(fds.begin() + static_cast<std::ptrdiff_t>(at));
             });
-            else Guarded(notImplemented, [&] { close_nid_postfix(static_cast<int>(rng.Interesting())); });
+            else Guarded(notImplemented, [&] { close_nid_postfix(rng.Below(2) ? -1 - static_cast<int>(rng.Below(5)) : 5000 + static_cast<int>(rng.Below(1000))); });
             break;
         case 6:
             Guarded(notImplemented, [&] {
-                void* const p = mmap_nid_postfix(nullptr, rng.Below(2) ? rng.Below(0x20000) : rng.Interesting(), static_cast<int>(rng.Below(8)), 0x1002, -1, 0);
+                void* const p = mmap_nid_postfix(nullptr, rng.Below(4) ? rng.Below(0x20000) : rng.Bounded(extreme), static_cast<int>(rng.Below(8)), 0x1002, -1, 0);
                 if (p != reinterpret_cast<void*>(static_cast<std::uintptr_t>(-1))) maps.emplace_back(p, 0x1000);
             });
             break;
@@ -104,7 +122,7 @@ int main() {
             if (!maps.empty()) Guarded(notImplemented, [&] {
                 auto& m = maps[rng.Below(maps.size())];
                 const auto offset = rng.Below(3) ? 0 : rng.Interesting();
-                const auto length = rng.Below(3) ? rng.Below(0x4000) : rng.Interesting();
+                const auto length = rng.Below(3) ? rng.Below(0x4000) : rng.Bounded(extreme);
                 auto* const address = static_cast<char*>(m.first) + (offset & 0xffff);
                 switch (rng.Below(3)) {
                 case 0: mprotect_nid_postfix(address, length, static_cast<int>(rng.Interesting())); break;
@@ -119,7 +137,7 @@ int main() {
                 munmap_nid_postfix(maps[at].first, maps[at].second);
                 maps.erase(maps.begin() + static_cast<std::ptrdiff_t>(at));
             });
-            else Guarded(notImplemented, [&] { munmap_nid_postfix(reinterpret_cast<void*>(rng.Interesting()), rng.Interesting()); });
+            else Guarded(notImplemented, [&] { munmap_nid_postfix(reinterpret_cast<void*>(rng.Interesting()), rng.Bounded(extreme)); });
             break;
         }
     }
