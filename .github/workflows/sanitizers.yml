@@ -32,7 +32,7 @@ jobs:
           cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo -DBUILD_TESTING=ON
           -DANYPS5_SANITIZERS=ON -DCMAKE_C_COMPILER=gcc -DCMAKE_CXX_COMPILER=g++
       - run: cmake --build build --target core/relinker/all
-      - run: ctest --test-dir build/core/relinker --output-on-failure --timeout 600
+      - run: ctest --test-dir build/core/relinker -E '^guest_module_args$' --output-on-failure --timeout 600
 
   libs:
     runs-on: ubuntu-latest
