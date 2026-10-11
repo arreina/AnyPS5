@@ -32,10 +32,15 @@ std::atomic<std::uint64_t> commitGeneration{1};
 std::atomic<void (*)(std::uintptr_t, std::size_t, std::uint64_t)> privateMappingObserver{nullptr};
 #endif
 
-constexpr std::uintptr_t ArenaStart = 0x0000000200000000ull;
-constexpr std::uintptr_t SystemReservedStart = 0x00000007FFFFC000ull;
-constexpr std::uintptr_t SystemReservedEnd = 0x0000001000000000ull;
-constexpr std::uintptr_t ApplicationAreaEnd = 0x000000FC00000000ull;
+#if defined(__SANITIZE_ADDRESS__)
+constexpr std::uintptr_t WindowShift = 0x0000100000000000ull;
+#else
+constexpr std::uintptr_t WindowShift = 0;
+#endif
+constexpr std::uintptr_t ArenaStart = WindowShift + 0x0000000200000000ull;
+constexpr std::uintptr_t SystemReservedStart = WindowShift + 0x00000007FFFFC000ull;
+constexpr std::uintptr_t SystemReservedEnd = WindowShift + 0x0000001000000000ull;
+constexpr std::uintptr_t ApplicationAreaEnd = WindowShift + 0x000000FC00000000ull;
 
 std::uintptr_t alignUp(std::uintptr_t value, std::size_t alignment) {
     return (value + alignment - 1) & ~(static_cast<std::uintptr_t>(alignment) - 1);
