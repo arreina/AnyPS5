@@ -92,7 +92,7 @@ constexpr std::uint32_t kInstructionPrefixes[] = {
 };
 
 const std::uint32_t kCapabilities[] = {
-    spv::CapabilityGroupNonUniform, spv::CapabilityGroupNonUniformBallot, spv::CapabilityGroupNonUniformShuffle,
+    spv::CapabilityFloat64, spv::CapabilityGroupNonUniform, spv::CapabilityGroupNonUniformBallot, spv::CapabilityGroupNonUniformShuffle,
     spv::CapabilitySignedZeroInfNanPreserve, 4448, 11, 5347, 5283, 3, spv::CapabilityImageGatherExtended,
     spv::CapabilityMinLod, spv::CapabilityStorageImageWriteWithoutFormat, spv::CapabilityStorageImageReadWithoutFormat,
     spv::CapabilitySampledImageArrayDynamicIndexing, spv::CapabilityStorageImageArrayDynamicIndexing,
@@ -150,7 +150,6 @@ int main() {
     const auto cases = caseCount();
     std::size_t compiled = 0;
     std::size_t invalid = 0;
-    std::size_t byteConstants = 0;
     std::size_t seedsCompiled = 0;
     for (std::size_t index = 0; index < std::size(kSeeds) + cases; ++index) {
         const auto& seed = kSeeds[index < std::size(kSeeds) ? index : random() % std::size(kSeeds)];
@@ -182,10 +181,8 @@ int main() {
             if (index < std::size(kSeeds)) ++seedsCompiled;
             else ++compiled;
         } catch (const std::exception& error) {
-            if (std::string_view(error.what()).find("SPIR-V validation after optimization") != std::string_view::npos &&
-                std::string_view(error.what()).find("Cannot form constants of 8- or 16-bit types") != std::string_view::npos) {
-                ++byteConstants;
-            } else if (std::string_view(error.what()).find("SPIR-V validation") != std::string_view::npos) {
+            if (index < std::size(kSeeds)) std::fprintf(stderr, "seed %zu did not compile: %.400s\n", index, error.what());
+            if (std::string_view(error.what()).find("SPIR-V validation") != std::string_view::npos) {
                 ++invalid;
                 std::fprintf(stderr, "case %zu produced invalid SPIR-V: %.400s\n", index, error.what());
                 std::fprintf(stderr, "stage %d, %zu words:", static_cast<int>(seed.stage), code.size());
@@ -194,6 +191,6 @@ int main() {
             }
         }
     }
-    std::printf("recompiler fuzz: %zu/%zu seeds compiled, %zu cases, %zu compiled, %zu invalid SPIR-V, %zu with 8-bit constants folded by CCP\n", seedsCompiled, std::size(kSeeds), cases, compiled, invalid, byteConstants);
+    std::printf("recompiler fuzz: %zu/%zu seeds compiled, %zu cases, %zu compiled, %zu invalid SPIR-V\n", seedsCompiled, std::size(kSeeds), cases, compiled, invalid);
     return invalid == 0 && seedsCompiled == std::size(kSeeds) ? 0 : 1;
 }

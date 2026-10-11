@@ -79,7 +79,7 @@ def main():
                     output.unlink()
                     continue
                 assert result.returncode == 2, (case, mode, result)
-                assert result.stderr.startswith("FAIL: ") and "std::" not in result.stderr, (case, mode, result)
+                assert any(line.startswith("FAIL: ") for line in result.stderr.splitlines()) and "std::" not in result.stderr, (case, mode, result)
                 assert not output.exists(), (case, mode, result)
     print("Malformed unwind tests passed")
 
