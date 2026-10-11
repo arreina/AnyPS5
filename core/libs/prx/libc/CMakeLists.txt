@@ -1,6 +1,7 @@
 target_sources(libc PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/Export.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/src/General.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/CreationMask.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/src/specifics/gcc/StackGuard.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/src/specifics/windows/CrashReport.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/src/specifics/linux/DlIteratePhdr.cpp
@@ -300,6 +301,16 @@ if(BUILD_TESTING)
     if(WIN32)
         target_link_libraries(guest_interface_tests PRIVATE ws2_32 iphlpapi)
         set_tests_properties(guest_interfaces PROPERTIES ENVIRONMENT_MODIFICATION
+            "PATH=path_list_prepend:$<TARGET_FILE_DIR:libc>")
+    endif()
+    add_test_executable(guest_atoi_tests ${LIBS_INCLUDE_DIR}/tests/GuestAtoi.cpp)
+    target_include_directories(guest_atoi_tests PRIVATE ${LIBS_INCLUDE_DIR})
+    target_link_libraries(guest_atoi_tests PRIVATE libc)
+    configure_windows_unwind(guest_atoi_tests)
+    add_test(NAME guest_atoi COMMAND guest_atoi_tests)
+    set_tests_properties(guest_atoi PROPERTIES TIMEOUT 20)
+    if(WIN32)
+        set_tests_properties(guest_atoi PROPERTIES ENVIRONMENT_MODIFICATION
             "PATH=path_list_prepend:$<TARGET_FILE_DIR:libc>")
     endif()
     add_test_executable(guest_reallocalign_tests ${LIBS_INCLUDE_DIR}/tests/GuestReallocalign.cpp)

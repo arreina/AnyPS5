@@ -231,6 +231,9 @@ RelinkResult RelinkerPipeline::Relink(const std::vector<std::uint8_t>& sourceElf
             const std::uint32_t symIdx = static_cast<std::uint32_t>(rInfo >> 32);
             const std::uint32_t relType = static_cast<std::uint32_t>(rInfo & 0xffffffff);
 
+            if (relType == R_X86_64_NONE)
+                continue;
+
             if (relType == 8) {
                 if (symIdx != 0)
                     throw RelinkerException("RELATIVE relocation has a nonzero symbol index", pos);

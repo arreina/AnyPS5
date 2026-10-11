@@ -35,7 +35,7 @@ relinker --macos source/input.elf eboot
 
 Add `--to-intel` for Intel hosts, or `--to-rosetta` for Rosetta; a title that runs under Rosetta on Apple silicon is relinked with `--macos --to-rosetta`. The output format defaults to Linux ELF regardless of the filename; `.exe` alone does not select Windows.
 
-The executable output must not refer to the input executable or a bundled module being converted, including through a hard link or symbolic link. An existing output file can be replaced if it is separate from those inputs.
+The executable, registry, icon and desktop entry output files must not refer to the input executable or a bundled module being converted, including through a hard link or symbolic link. These collisions fail before any output is written. An existing output file can be replaced if it is separate from those inputs.
 
 ## Options
 
@@ -127,6 +127,15 @@ Games ask for the console's language with `sceSystemServiceParamGetInt` and show
 ### GPU selection
 
 The game runs on the first Vulkan 1.1 device with graphics and compute queues and swapchain presentation, preferring a discrete GPU over an integrated one. Set `ANYPS5_GPU` to a part of a device name, compared without regard to case, to run on another device; the names are printed at start-up in the `Physical device candidate` lines. When no usable device contains the text, the start fails and the error lists the device names.
+
+On Windows, the OpenCL, OpenGL, and Vulkan Compatibility Pack can install Mesa Dozen, which exposes D3D12 devices through Vulkan. Some D3D12 drivers can crash while the Vulkan loader enumerates adapters, even when AnyPS5 would select a native Vulkan device. If this happens and the system has another Vulkan driver, disable Dozen for the current PowerShell session before launching AnyPS5:
+
+```powershell
+$env:VK_LOADER_DRIVERS_DISABLE = '*dzn*'
+.\app.exe
+```
+
+Do not disable Dozen if it is the only Vulkan driver available; the application would have no device to use. `VK_LOADER_DRIVERS_DISABLE` matches Vulkan driver manifest filenames and requires a Vulkan loader built with headers 1.3.234 or later ([loader documentation](https://github.com/KhronosGroup/Vulkan-Loader/blob/main/docs/LoaderInterfaceArchitecture.md#filter-environment-variables)).
 
 ### Storing GPU results at each flip
 

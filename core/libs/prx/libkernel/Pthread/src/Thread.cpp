@@ -340,9 +340,11 @@ static void finishThread(PthreadPrivate* self, void* retval) {
     if (CurrentGuestState().finishing)
         throw std::runtime_error("Guest thread is already finishing");
     CurrentGuestState().finishing = true;
+    CurrentGuestState().exiting = true;
     UnregisterStack(self);
     if (const auto callback = threadDtors.load())
         callback();
+    ThreadLifecycle::RunKeyDtors();
     {
         std::unique_lock<std::mutex> lk(self->_join_mtx);
         self->_retval = retval;

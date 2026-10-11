@@ -8,6 +8,7 @@
 #include "prx/libSceAgcDriver/Graphics/include/Draw.hpp"
 #include "prx/libSceAgcDriver/Graphics/include/DccMetadata.hpp"
 #include "prx/libSceAgcDriver/Graphics/include/DepthSurface.hpp"
+#include "prx/libSceAgcDriver/Graphics/include/MultisampleTarget.hpp"
 #include "prx/libSceAgcDriver/Graphics/include/GuestBufferMemory.hpp"
 #include "prx/libSceAgcDriver/Graphics/include/Resources.hpp"
 #include "prx/libSceAgcDriver/Graphics/include/ShaderResources.hpp"
@@ -38,6 +39,7 @@
 #else
 #include <sys/mman.h>
 #endif
+#include <functional>
 #include <algorithm>
 #include <array>
 #include <atomic>
@@ -1764,6 +1766,150 @@ void drawSnapshotPatchTests(const Device& device) {
     }
 }
 
+void drawSnapshotCapTests(const Device& device, Recorder& recorder) {
+    using namespace AgcDriver::GuestMemory;
+    const auto& context = device.GetContext();
+    const char* previous = std::getenv("APS5_DRAW_SNAPSHOT_MAX_MIB");
+    const std::string saved = previous != nullptr ? previous : "";
+#ifdef _WIN32
+    Require(_putenv_s("APS5_DRAW_SNAPSHOT_MAX_MIB", "1") == 0, "cannot set snapshot cap");
+#else
+    Require(setenv("APS5_DRAW_SNAPSHOT_MAX_MIB", "1", 1) == 0, "cannot set snapshot cap");
+#endif
+    struct RestoreCap {
+        const char* previous;
+        std::string saved;
+        ~RestoreCap() {
+#ifdef _WIN32
+            _putenv_s("APS5_DRAW_SNAPSHOT_MAX_MIB", saved.c_str());
+#else
+            if (previous != nullptr) {
+                setenv("APS5_DRAW_SNAPSHOT_MAX_MIB", saved.c_str(), 1);
+            } else {
+                unsetenv("APS5_DRAW_SNAPSHOT_MAX_MIB");
+            }
+#endif
+        }
+    } restore{previous, saved};
+    constexpr std::size_t bytes = 3 * 1024 * 1024;
+    void* block = context.hostImportAlignment != 0 ? AllocateWatched(bytes, 65536) : nullptr;
+    if (block == nullptr) {
+        std::cout << "host imports or write watching unavailable: draw snapshot cap not tested\n";
+        return;
+    }
+    struct Release {
+        void* block;
+        ~Release() { ReleaseWatched(block, bytes); }
+    } release{block};
+    std::memset(block, 0x11, bytes);
+    const auto address = reinterpret_cast<std::uint64_t>(block);
+    {
+        GuestAllocations::Mutation mutation;
+        mutation.Add(block, bytes, true, true, true);
+    }
+    struct Unregister {
+        const Context& context;
+        void* block;
+        ~Unregister() {
+            {
+                GuestAllocations::Mutation mutation;
+                mutation.Remove(block);
+            }
+            HostImportFor(context, reinterpret_cast<std::uint64_t>(block), bytes);
+        }
+    } unregister{context, block};
+    if (HostImportFor(context, address, bytes) == nullptr) {
+        std::cout << "host import of the watched block refused: draw snapshot cap not tested\n";
+        return;
+    }
+    const auto smallAddress = address + 4096;
+    constexpr std::size_t smallBytes = 1024 * 1024 - 4096;
+    const auto largeAddress = address + 1024 * 1024 + 8192;
+    constexpr std::size_t largeBytes = 1024 * 1024 + 4096;
+    ShaderRecompiler::RecompileResult program;
+    ShaderRecompiler::DescriptorBinding smallBinding;
+    smallBinding.kind = ShaderRecompiler::DescriptorKind::StorageBuffer;
+    smallBinding.role = ShaderRecompiler::DescriptorRole::GuestBuffers;
+    smallBinding.descriptorSet = 0;
+    smallBinding.binding = 0;
+    smallBinding.count = 1;
+    smallBinding.guestDescriptor = {static_cast<std::uint32_t>(smallAddress), static_cast<std::uint32_t>(smallAddress >> 32u) & 0xffffu, static_cast<std::uint32_t>(smallBytes), 0x31000000u};
+    smallBinding.bufferWritten = {false};
+    program.bindings.push_back(smallBinding);
+    ShaderRecompiler::DescriptorBinding largeBinding;
+    largeBinding.kind = ShaderRecompiler::DescriptorKind::StorageBuffer;
+    largeBinding.role = ShaderRecompiler::DescriptorRole::GuestBuffers;
+    largeBinding.descriptorSet = 0;
+    largeBinding.binding = 1;
+    largeBinding.count = 1;
+    largeBinding.guestDescriptor = {static_cast<std::uint32_t>(largeAddress), static_cast<std::uint32_t>(largeAddress >> 32u) & 0xffffu, static_cast<std::uint32_t>(largeBytes), 0x31000000u};
+    largeBinding.bufferWritten = {false};
+    program.bindings.push_back(largeBinding);
+    const CompiledShader compute{ShaderRecompiler::ShaderStage::Compute, &program, 0};
+    {
+        auto snapshotContext = context;
+        DescriptorCache cache(snapshotContext);
+        snapshotContext.descriptorCache = &cache;
+        Recorder snapshotRecorder(snapshotContext);
+        snapshotRecorder.Activate();
+        ShaderResources resources(snapshotContext, compute);
+        const auto bindings = resources.PrepareDrawBindings(snapshotRecorder);
+        Require(bindings != nullptr, "read-only draw bindings were not prepared");
+        Require(bindings->snapshots.size() == 1, "an input exceeding the draw snapshot cap was snapshotted");
+        Require(bindings->snapshots[0].address == smallAddress, "the snapshotted input does not match the smaller buffer below the cap");
+        Require(snapshotRecorder.ReusableDrawSnapshot(largeAddress, largeBytes) == nullptr, "an input exceeding the draw snapshot cap was kept in the snapshot cache");
+        if (Watched(address, bytes)) {
+            Require(snapshotRecorder.ReusableDrawSnapshot(smallAddress, smallBytes) != nullptr, "an input below the draw snapshot cap was not kept in the snapshot cache");
+        }
+        const auto contents = bindings->snapshots[0].buffer->Bytes();
+        Require(contents.size() == smallBytes && std::all_of(contents.begin(), contents.end(), [](std::byte value) { return value == std::byte{0x11}; }), "a draw snapshot does not hold the guest bytes of its draw");
+        std::memset(reinterpret_cast<void*>(smallAddress), 0x22, smallBytes);
+        std::memset(reinterpret_cast<void*>(largeAddress), 0x33, largeBytes);
+        Require(std::all_of(contents.begin(), contents.end(), [](std::byte value) { return value == std::byte{0x11}; }), "snapshotted input observed CPU overwrite");
+        const auto* inPlace = reinterpret_cast<const std::byte*>(largeAddress);
+        Require(inPlace[0] == std::byte{0x33} && std::all_of(inPlace, inPlace + largeBytes, [](std::byte value) { return value == std::byte{0x33}; }), "in-place bound input did not observe CPU write");
+        std::memset(block, 0x11, bytes);
+        snapshotRecorder.Sync();
+    }
+    const auto firstAddress = address + 4096;
+    constexpr std::size_t firstBytes = 600 * 1024;
+    const auto secondAddress = address + 600 * 1024 + 8192;
+    constexpr std::size_t secondBytes = 600 * 1024;
+    ShaderRecompiler::RecompileResult cumulativeProgram;
+    ShaderRecompiler::DescriptorBinding firstBinding;
+    firstBinding.kind = ShaderRecompiler::DescriptorKind::StorageBuffer;
+    firstBinding.role = ShaderRecompiler::DescriptorRole::GuestBuffers;
+    firstBinding.descriptorSet = 0;
+    firstBinding.binding = 0;
+    firstBinding.count = 1;
+    firstBinding.guestDescriptor = {static_cast<std::uint32_t>(firstAddress), static_cast<std::uint32_t>(firstAddress >> 32u) & 0xffffu, static_cast<std::uint32_t>(firstBytes), 0x31000000u};
+    firstBinding.bufferWritten = {false};
+    cumulativeProgram.bindings.push_back(firstBinding);
+    ShaderRecompiler::DescriptorBinding secondBinding;
+    secondBinding.kind = ShaderRecompiler::DescriptorKind::StorageBuffer;
+    secondBinding.role = ShaderRecompiler::DescriptorRole::GuestBuffers;
+    secondBinding.descriptorSet = 0;
+    secondBinding.binding = 1;
+    secondBinding.count = 1;
+    secondBinding.guestDescriptor = {static_cast<std::uint32_t>(secondAddress), static_cast<std::uint32_t>(secondAddress >> 32u) & 0xffffu, static_cast<std::uint32_t>(secondBytes), 0x31000000u};
+    secondBinding.bufferWritten = {false};
+    cumulativeProgram.bindings.push_back(secondBinding);
+    const CompiledShader cumulativeCompute{ShaderRecompiler::ShaderStage::Compute, &cumulativeProgram, 0};
+    {
+        auto snapshotContext = context;
+        DescriptorCache cache(snapshotContext);
+        snapshotContext.descriptorCache = &cache;
+        Recorder snapshotRecorder(snapshotContext);
+        snapshotRecorder.Activate();
+        ShaderResources resources(snapshotContext, cumulativeCompute);
+        const auto bindings = resources.PrepareDrawBindings(snapshotRecorder);
+        Require(bindings != nullptr, "read-only draw bindings were not prepared for cumulative test");
+        Require(bindings->snapshots.size() == 1, "cumulative cap permitted both inputs to snapshot");
+        Require(bindings->snapshots[0].address == firstAddress, "the earlier binding in the layout was not prioritised for the snapshot budget");
+        snapshotRecorder.Sync();
+    }
+    recorder.Activate();
+}
 
 void drawSnapshotEvictionTests(const Device& device) {
     using namespace AgcDriver::GuestMemory;
@@ -4168,6 +4314,109 @@ void dataRefreshTests(const Device& device, Recorder& recorder) {
     recorder.Sync();
 }
 
+void multisampleGuestAccessTests(const Device& device, Recorder& recorder) {
+    const auto& base = device.GetContext();
+    if ((base.limits.framebufferColorSampleCounts & VK_SAMPLE_COUNT_4_BIT) == 0 || !device.NullDescriptors()) {
+        std::cout << "4x color targets or nullDescriptor unavailable: multisampled target guest access not tested\n";
+        return;
+    }
+    constexpr std::uint32_t side = 64;
+    constexpr std::size_t targetBytes = 65536u;
+    constexpr std::size_t bytes = 5u * 65536u;
+#ifdef _WIN32
+    void* block = VirtualAlloc(nullptr, bytes, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
+#else
+    void* block = std::aligned_alloc(65536, bytes);
+#endif
+    Require(block != nullptr, "cannot allocate the multisampled target block");
+    std::memset(block, 0, bytes);
+    const auto address = reinterpret_cast<std::uint64_t>(block);
+    {
+        GuestAllocations::Mutation mutation;
+        mutation.Add(block, bytes, true, true, true);
+    }
+    struct Unregister {
+        const Context& context;
+        void* block;
+        ~Unregister() {
+            ClearMultisampleTargets(context.device);
+            ClearCachedTextures(context.device);
+            {
+                GuestAllocations::Mutation mutation;
+                mutation.Remove(block);
+            }
+#ifdef _WIN32
+            VirtualFree(block, 0, MEM_RELEASE);
+#else
+            std::free(block);
+#endif
+        }
+    } unregister{base, block};
+    TextureDetiler detiler(base);
+    auto context = base;
+    context.detiler = &detiler;
+    context.nullDescriptors = true;
+    TextureCache cache(context);
+    context.textureCache = &cache;
+    const auto refused = [](const std::function<void()>& access, const std::string& expected, const std::string& what) {
+        std::string message;
+        try {
+            access();
+        } catch (const std::exception& error) {
+            message = error.what();
+        }
+        Require(message.find(expected) != std::string::npos && message.find("multisampled color target") != std::string::npos, what + " of a resolved-only multisampled target's memory did not throw: " + message);
+    };
+    ColorTarget target{};
+    target.address = address;
+    target.surfaceAddress = address;
+    target.extent = {side, side};
+    target.surfaceExtent = target.extent;
+    target.format = VK_FORMAT_R8G8B8A8_UNORM;
+    target.bytes = targetBytes;
+    target.samples = 4;
+    {
+        std::lock_guard gpu(GpuMutex());
+        Require(MultisampleTargetView(context, target) != VK_NULL_HANDLE, "the multisampled target has no view");
+        recorder.Submit();
+        device.WaitQueue();
+        recorder.Sync();
+    }
+    std::array<std::byte, 64> texels{};
+    refused([&] { AgcDriver::GuestMemory::Read(address + 256u, texels); }, "a CPU read", "a CPU read");
+    refused([&] { RequireNoMultisampleTarget(address, 64u, "a DMA copy"); }, "a DMA copy", "a DMA copy");
+    ShaderRecompiler::RecompileResult program;
+    ShaderRecompiler::DescriptorBinding binding;
+    binding.kind = ShaderRecompiler::DescriptorKind::SampledImage;
+    binding.role = ShaderRecompiler::DescriptorRole::GuestImages;
+    binding.descriptorSet = 0;
+    binding.binding = ShaderRecompiler::RuntimeAbi::FirstImageBinding;
+    binding.count = 1;
+    binding.imageShape = ShaderRecompiler::DescriptorImageShape::Image2D;
+    binding.imageSamplers = {0};
+    binding.guestDescriptor = {
+        static_cast<std::uint32_t>(address >> 8u),
+        static_cast<std::uint32_t>((address >> 40u) & 0xffu) | (56u << 20u) | (((side - 1u) & 3u) << 30u),
+        ((side - 1u) >> 2u) | ((side - 1u) << 14u),
+        0xfacu | (9u << 28u),
+        0u,
+        0u,
+        0u,
+        0u,
+    };
+    program.bindings.push_back(binding);
+    const CompiledShader compute{ShaderRecompiler::ShaderStage::Compute, &program, 0};
+    refused([&] {
+        std::lock_guard gpu(GpuMutex());
+        ShaderResources resources(context, compute);
+    }, "a texture read", "a texture read");
+    refused([&] { AgcDriver::GuestMemory::Read(address + 3u * 65536u + 256u, texels); }, "a CPU read", "a CPU read in the padding of a later sample plane");
+    AgcDriver::GuestMemory::Read(address + 4u * 65536u, texels);
+    ClearMultisampleTargets(context.device);
+    AgcDriver::GuestMemory::Read(address + 256u, texels);
+    std::cout << "Multisampled target guest access tests passed\n";
+}
+
 void depthSurfaceProofTests(const Device& device, Recorder& recorder) {
     const auto& base = device.GetContext();
     if (!device.NullDescriptors()) {
@@ -4896,6 +5145,13 @@ void pipelineLibraryTests(const Device& device) {
     state.colors.front().format = VK_FORMAT_R16G16B16A16_SFLOAT;
     static_cast<void>(lookup());
     Require(counters().built == std::array<std::uint64_t, 4>{2, 2, 3, 3}, "another target format rebuilt more than the fragment output library");
+    state.samples = 4;
+    state.colors.front().samples = 4;
+    const auto multisampled = lookup();
+    Require(counters().built == std::array<std::uint64_t, 4>{2, 2, 4, 4}, "a 4x pipeline shared the 1x fragment shader or fragment output library");
+    state.samples = 1;
+    state.colors.front().samples = 1;
+    Require(lookup() != multisampled && counters().built == std::array<std::uint64_t, 4>{2, 2, 4, 4}, "the 1x pipeline after a 4x one built its libraries again");
     WaitForOptimizedPipelines(context.device);
     const auto lto = std::getenv("APS5_NO_PIPELINE_LTO") == nullptr && context.pipelineLinkTimeOptimization;
     Require(counters().optimized == (lto ? counters().linked : 0u), "a linked pipeline was not optimized in the background");
@@ -4974,9 +5230,18 @@ int main(int argc, char** argv) {
             std::cout << "CMASK copied clear, write-back and failure tests passed\n";
             return 0;
         }
+        if (argc == 2 && std::string_view(argv[1]) == "--multisample-only") {
+            multisampleGuestAccessTests(device, recorder);
+            return 0;
+        }
         if (argc == 2 && std::string_view(argv[1]) == "--draw-descriptors-only") {
             drawDescriptorWriteTests(device, recorder);
             std::cout << "Draw descriptor writes and snapshot overrides passed\n";
+            return 0;
+        }
+        if (argc == 2 && std::string_view(argv[1]) == "--draw-snapshot-cap-only") {
+            drawSnapshotCapTests(device, recorder);
+            std::cout << "Draw snapshot cap tests passed\n";
             return 0;
         }
 
@@ -4997,10 +5262,12 @@ int main(int argc, char** argv) {
         resourceReadTests(device, recorder);
         readWrittenStagingTests(device, recorder);
         depthSurfaceProofTests(device, recorder);
+        multisampleGuestAccessTests(device, recorder);
         misalignedSnapshotTests(device, recorder);
         misalignedRegionTests(device, recorder);
         drawSnapshotReuseTests(device, recorder);
         drawDescriptorWriteTests(device, recorder);
+        drawSnapshotCapTests(device, recorder);
         drawSnapshotEvictionTests(device);
         drawInputReuseTests(device, recorder);
         drawInputInPlaceTests(device, recorder);
