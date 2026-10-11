@@ -2,6 +2,7 @@ import argparse
 import json
 import os
 import re
+import sys
 from html import escape
 from pathlib import Path
 
@@ -12,7 +13,15 @@ ISA = Path(__file__).resolve().parent / "rdna_isa.txt"
 SOURCE = f'https://github.com/{os.environ.get("GITHUB_REPOSITORY", "boykopovar/AnyPS5")}/blob/main'
 DEFINITION = re.compile(r"\bAPS5_VABI\s+(\w+)\s*\([^;{]*\)\s*(?:noexcept\s*)?(?:try\s*)?\{")
 STUB = "NotImplemented_nid_no_patch"
-STUB_WRAPPER = re.compile(r"\bstatic\s+(?:\[\[noreturn\]\]\s+)?void\s+(\w+)\s*\([^;{]*\)\s*\{")
+CMAKE_SHARED = re.compile(r'^\s*include\(\s*"?\$\{CMAKE_CURRENT_SOURCE_DIR\}/\.\./([\w.-]+)/[\w.-]+\.cmake"?\s*\)', re.M)
+SOURCE_SHARED = re.compile(r'^\s*#\s*include\s*"prx/([\w.-]+)/[\w./-]+\.cpp"', re.M)
+STUB_WRAPPER = re.compile(r"\bstatic\s+(?:\[\[noreturn\]\]\s+)?[\w:<>,\s*&]+?\s+(\w+)\s*\([^;{]*\)\s*\{")
+NON_CODE = re.compile(r'"(?:\\.|[^"\\\n])*"|\'(?:\\.|[^\'\\\n])*\'|//[^\n]*|/\*.*?\*/', re.S)
+DISCARD = re.compile(r"\(void\)\s*\w+\s*;")
+EMPTY_RETURN = re.compile(r"return\s*;")
+CONST_RETURN = re.compile(r"return\s+(?:[+-]?\s*(?:0[xX][0-9a-fA-F]+|\d+)[uUlL]*|\w+|\"(?:\\.|[^\"\\])*\")\s*;")
+WRAPPER_RETURN = re.compile(r"return\s+(\w+)\s*\(([^()]*)\)\s*;")
+BARE_THROW = re.compile(r"throw\b[^;]*;")
 FLAT_SEGMENTS = ("GLOBAL_", "SCRATCH_")
 OPCODE_SENTINELS = {"Invalid", "Count", "Unknown", "Unsupported"}
 OPCODE_ALIASES = {
@@ -53,14 +62,20 @@ OPCODE_VARIANTS = {
     "VMacLegacyF32": ("V_FMAC_LEGACY_F32",),
     "VMadLegacyF32": ("V_FMA_LEGACY_F32",),
     "ImageSample": ("IMAGE_SAMPLE_L", "IMAGE_SAMPLE_B", "IMAGE_SAMPLE_C_LZ", "IMAGE_SAMPLE_L_O", "IMAGE_SAMPLE_D_CL_O"),
-    "ImageLoadPck": ("IMAGE_LOAD_PCK2", "IMAGE_LOAD_PCK4"),
-    "ImageLoadMipPck": ("IMAGE_LOAD_MIP_PCK2", "IMAGE_LOAD_MIP_PCK4"),
-    "ImageStorePck": ("IMAGE_STORE_PCK2", "IMAGE_STORE_PCK4"),
-    "ImageStoreMipPck": ("IMAGE_STORE_MIP_PCK2", "IMAGE_STORE_MIP_PCK4"),
 }
 REPORT_ROWS = 100
 PANEL_WIDTH, GAP, MAP_HEIGHT, HEADER = 495, 10, 280, 30
 DONE_COLOR, TODO_COLOR, BORDER, TEXT = "#2ea043", "#6e7681", "#0d1117", "#ffffff"
+
+
+def blank(match):
+    if match.group(0).startswith(('"', "'")):
+        return "LITERAL"
+    return re.sub(r"[^\n]", " ", match.group(0))
+
+
+def code(text):
+    return NON_CODE.sub(blank, text)
 
 
 def body_end(text, start):
@@ -83,20 +98,82 @@ def stub_calls(text):
     return calls
 
 
+def statements(body):
+    depth, start, parts = 0, 1, []
+    for i, character in enumerate(body[1:], 1):
+        if character == "{":
+            depth += 1
+        elif character == "}":
+            depth -= 1
+        elif character == ";" and not depth:
+            parts.append(body[start:i + 1])
+            start = i + 1
+    parts.append(body[start:])
+    return parts
+
+
+def inert_statement(statement, wrappers):
+    if EMPTY_RETURN.fullmatch(statement) or CONST_RETURN.fullmatch(statement) or BARE_THROW.fullmatch(statement):
+        return True
+    call = WRAPPER_RETURN.fullmatch(statement)
+    return bool(call) and call.group(1) in wrappers
+
+
+def inert_body(body, wrappers):
+    terminals = 0
+    for statement in statements(body):
+        statement = statement.strip()
+        if not statement:
+            continue
+        if DISCARD.fullmatch(statement):
+            continue
+        if terminals or not inert_statement(statement, wrappers):
+            return False
+        terminals += 1
+    return True
+
+
+def inert_wrappers(text):
+    bodies = {m.group(1): text[m.end() - 1:body_end(text, m.end() - 1)] for m in STUB_WRAPPER.finditer(text)}
+    names = set()
+    while True:
+        found = {name for name, body in bodies.items() if name not in names and inert_body(body, names)}
+        if not found:
+            return names
+        names |= found
+
+
 def scan_library(path):
-    done, todo = set(), set()
+    done, todo, inert, live = set(), set(), set(), set()
     for source in path.rglob("*.cpp"):
-        text = source.read_text(errors="ignore")
+        if "tests" in source.relative_to(path).parts:
+            continue
+        text = code(source.read_text(errors="ignore"))
         calls = stub_calls(text)
+        wrappers = inert_wrappers(text)
         for match in DEFINITION.finditer(text):
             name = match.group(1)
             if name.endswith("_nid_no_patch"):
                 continue
             body = text[match.end() - 1:body_end(text, match.end() - 1)]
-            (todo if any(call in body for call in calls) else done).add(name)
+            if any(call in body for call in calls):
+                todo.add(name)
+                continue
+            done.add(name)
+            (inert if inert_body(body, wrappers) else live).add(name)
     todo -= done
-    return {"name": path.name, "label": path.name.removeprefix("libSce"), "done": len(done), "todo": len(todo),
-            "done_names": sorted(done), "todo_names": sorted(todo)}
+    inert -= live
+    group = {"name": path.name, "label": path.name.removeprefix("libSce"), "done": len(done), "todo": len(todo),
+             "done_names": sorted(done), "todo_names": sorted(todo), "inert_names": sorted(inert)}
+    if not (done or todo):
+        cmake = path / "CMakeLists.txt"
+        texts = [(CMAKE_SHARED, cmake.read_text())] if cmake.is_file() else []
+        texts += [(SOURCE_SHARED, source.read_text(errors="ignore")) for source in sorted(path.glob("*.cpp"))]
+        owners = [m[1] for pattern, content in texts for m in pattern.finditer(content)]
+        owners = [o for o in owners if o != path.name and (path.parent / o).is_dir()]
+        if owners:
+            group["shared_sources"] = owners[0]
+    return group
 
 
 def summarize(groups):
@@ -205,7 +282,9 @@ def treemap(title, data, left):
     parts = [text(left + 4, 21, f'{title}: {data["percent"]}% ({data["done"]}/{data["total"]})', 16)]
     for group, (x, y, w, h) in zip(groups, squarify([g["done"] + g["todo"] for g in groups], left, HEADER, PANEL_WIDTH, MAP_HEIGHT)):
         total = group["done"] + group["todo"]
-        parts.append(f'<g><title>{escape(group["name"])}: {group["done"]}/{total} ({100 * group["done"] / total:.0f}%)</title>')
+        shared = [g["name"] for g in data["groups"] if g.get("shared_sources") == group["name"]]
+        suffix = "; shared by " + ", ".join(shared) if shared else ""
+        parts.append(f'<g><title>{escape(group["name"])}: {group["done"]}/{total} ({100 * group["done"] / total:.0f}%){escape(suffix)}</title>')
         for i, cell in enumerate(cells(total, x + 1, y + 1, w - 2, h - 2)):
             parts.append(rect(*cell, DONE_COLOR if i < group["done"] else TODO_COLOR))
         parts.append(f'<rect x="{x:.2f}" y="{y:.2f}" width="{w:.2f}" height="{h:.2f}" fill="none" stroke="{BORDER}" stroke-width="2"/>')
@@ -242,8 +321,16 @@ def table(heading, column, data):
     rows = [f"<h2>{heading}</h2>", "<table>",
             f"<tr><th>{column}</th><th>Implemented</th><th>Total</th><th>%</th></tr>"]
     for group in sorted(data["groups"], key=lambda g: g["name"].lower()):
+        if "shared_sources" in group:
+            owner = escape(group["shared_sources"])
+            rows.append(f'<tr><td>{escape(group["name"])}</td><td colspan="3">Shared sources: '
+                        f'<a href="{SOURCE}/core/libs/prx/{owner}">{owner}</a></td></tr>')
+            continue
         total = group["done"] + group["todo"]
-        percent = f'{100 * group["done"] / total:.0f}%' if total else "-"
+        if not total:
+            rows.append(f'<tr><td>{escape(group["name"])}</td><td colspan="3">No exports</td></tr>')
+            continue
+        percent = f'{100 * group["done"] / total:.0f}%'
         rows.append(f'<tr><td>{escape(group["name"])}</td><td>{group["done"]}</td><td>{total}</td><td>{percent}</td></tr>')
     rows.append(f'<tr><th>Total</th><th>{data["done"]}</th><th>{data["total"]}</th><th>{data["percent"]}%</th></tr>')
     rows.append("</table>")
@@ -264,9 +351,12 @@ def summary(libraries, shaders):
         f'<p>Generated by <a href="{SOURCE}/tools/progress.py">tools/progress.py</a> on every push to <code>main</code>. '
         'Raw numbers: <a href="progress.json">progress.json</a>.</p>',
         table("System libraries", "Library", libraries),
-        "<p>A function is implemented when it no longer calls <code>NotImplemented_nid_no_patch</code>. "
+        "<p>A function is implemented when it no longer calls <code>NotImplemented_nid_no_patch</code>; "
+        "comparison reports separately mark implemented functions whose body only returns a constant or throws. "
         f'The total only includes functions already declared in <a href="{SOURCE}/core/libs/prx">core/libs/prx</a>, '
-        "not every function exported by the PS5 firmware.</p>",
+        "not every function exported by the PS5 firmware. Shared-source libraries are counted only at their source library. "
+        "Libraries with no exports only provide an empty module for titles that load them. "
+        f'<a href="{SOURCE}/docs/dev/PROGRESS.md">Counting rules</a>.</p>',
         table("GPU shader instructions", "Encoding", shaders),
         f'<p>The total is the AMD RDNA 1 + RDNA 2 instruction list (<a href="{SOURCE}/tools/rdna_isa.txt">tools/rdna_isa.txt</a>). '
         f'An instruction is implemented when the <a href="{SOURCE}/core/shader/recompiler/RdnaDecoder">decoder</a> recognizes it. '
@@ -275,8 +365,9 @@ def summary(libraries, shaders):
     ]) + "\n"
 
 
-def names(data, state):
-    return {(g["name"], n) for g in data["groups"] for n in g.get(f"{state}_names", [])}
+def names(data, state, owners=None):
+    owners = owners or {}
+    return {(owners.get(g["name"], g["name"]), n) for g in data["groups"] for n in g.get(f"{state}_names", [])}
 
 
 def details(icon, title, column, items):
@@ -290,21 +381,28 @@ def details(icon, title, column, items):
 
 
 def compare(title, column, unit, base, head):
-    base_done, head_done = names(base, "done"), names(head, "done")
-    base_all, head_all = base_done | names(base, "todo"), head_done | names(head, "todo")
+    owners = {g["name"]: g["shared_sources"] for g in head["groups"] if "shared_sources" in g}
+    previous = {g["name"]: g.get("shared_sources") for g in base["groups"]}
+    shared = {(name, owner) for name, owner in owners.items() if previous.get(name) != owner}
+    base_done, head_done = names(base, "done", owners), names(head, "done", owners)
+    base_all, head_all = base_done | names(base, "todo", owners), head_done | names(head, "todo", owners)
     implemented, declared = head_done - base_done, head_all - base_all - head_done
     regressed, removed = base_done & (head_all - head_done), base_all - head_all
-    if not (implemented or declared or regressed or removed):
+    inert = implemented & names(head, "inert", owners)
+    if not (implemented or declared or regressed or removed or shared):
         return []
     delta = round(head["percent"] - base["percent"], 2)
     icon = "📈" if delta > 0 else "📉" if delta < 0 else "➖"
     counts = [f"{n:+} {label}" for n, label in ((len(implemented), "implemented"), (len(declared), "declared"),
                                                 (-len(regressed), "reverted"), (-len(removed), "removed")) if n]
-    lines = [f'{icon} **{title}**: {head["percent"]}% ({delta:+}%, {", ".join(counts)} {unit})', ""]
+    changes = f', {", ".join(counts)} {unit}' if counts else ""
+    lines = [f'{icon} **{title}**: {head["percent"]}% ({delta:+}%{changes})', ""]
     lines += details("✅", "implemented", column, implemented)
+    lines += details("⚪", "behaviourally empty (constant return or throw)", column, inert)
     lines += details("🆕", "declared as stubs", column, declared)
     lines += details("⚠️", "went back to stubs", column, regressed)
     lines += details("🗑️", "removed", column, removed)
+    lines += details("🔗", "now sharing sources", column, shared)
     return lines + [""]
 
 
@@ -315,6 +413,8 @@ def report(base, head):
 
 
 if __name__ == "__main__":
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8")
     parser = argparse.ArgumentParser()
     parser.add_argument("output", type=Path, nargs="?")
     parser.add_argument("--root", type=Path, help="source tree to measure instead of the one containing this script")
@@ -322,7 +422,7 @@ if __name__ == "__main__":
                         help="print a markdown report of the changes between two progress.json files")
     args = parser.parse_args()
     if args.compare:
-        base, head = (json.loads(path.read_text()) for path in args.compare)
+        base, head = (json.loads(path.read_text(encoding="utf-8")) for path in args.compare)
         print(report(base, head), end="")
         raise SystemExit
     if not args.output:

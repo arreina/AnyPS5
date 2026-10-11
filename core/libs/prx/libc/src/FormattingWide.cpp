@@ -10,7 +10,6 @@
 
 #include "SceTypes.hpp"
 #include "prx/libc/include/General.hpp"
-#include "prx/libc/include/VarArgsAbi.hpp"
 #include "prx/libc/include/FileStream.hpp"
 #include "prx/libc/include/WindowsFormatting.hpp"
 
@@ -160,7 +159,8 @@ std::u16string FormatWide(const char16_t* format, VaList* source, bool secure = 
                 AppendNumber(out, spec + static_cast<char>(conversion), args.Next<double>());
             }
         } else if (conversion == u'p' && length.empty()) {
-            AppendNumber(out, spec + 'p', args.Next<void*>());
+            const std::string text = LibcDetail::FormatPointer(spec, args.Next<void*>());
+            out.append(text.begin(), text.end());
         } else if (conversion == u'c' || conversion == u'C') {
             const int value = args.Next<int>();
             std::u16string text;
@@ -213,6 +213,13 @@ int APS5_VABI vswprintf_nid_postfix(char16_t* buffer, std::size_t size, const ch
         errno = 22;
         return -1;
     }
+}
+
+int APS5_VABI swprintf_nid_postfix(char16_t* buffer, std::size_t size, const char16_t* format, ...) {
+    APS5_VA_BEGIN(format);
+    const int result = vswprintf_nid_postfix(buffer, size, format, reinterpret_cast<VaList*>(args));
+    APS5_VA_END();
+    return result;
 }
 
 int APS5_VABI snwprintf_s_nid_postfix(char16_t* buffer, std::size_t size, const char16_t* format, ...) {

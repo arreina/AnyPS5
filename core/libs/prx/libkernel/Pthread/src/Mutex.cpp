@@ -87,7 +87,17 @@ int MutexOperations::Timedlock(PthreadMutex* mutex, const KernelTimespec* abstim
     if (std::chrono::duration<long double>(duration) >= std::chrono::duration<long double>(std::chrono::system_clock::duration::max()))
         throw std::overflow_error("Absolute mutex timeout exceeds the host clock range");
     const auto deadline = std::chrono::system_clock::time_point(std::chrono::duration_cast<std::chrono::system_clock::duration>(duration));
-    return acquireMutex(resolveMutex(mutex, true), [&](auto& native) { return native.try_lock_until(deadline); }, sceTimedOut, false);
+    return acquireMutex(resolveMutex(mutex, true), [&](auto& native) {
+#ifdef _WIN32
+        while (!native.try_lock()) {
+            if (std::chrono::system_clock::now() >= deadline) return false;
+            TimedWait::SleepNanos(1000000);
+        }
+        return true;
+#else
+        return native.try_lock_until(deadline);
+#endif
+    }, sceTimedOut, false);
 }
 
 extern "C" {
@@ -154,14 +164,21 @@ int APS5_VABI scePthreadMutexDestroy(PthreadMutex* mutex) {
         return 0;
     }
     if (*mutex && (*mutex)->_owner.load(std::memory_order_acquire) != std::thread::id{})
-        throw std::runtime_error("Cannot destroy a locked mutex");
+        return SCE_KERNEL_ERROR_EBUSY;
     delete *mutex;
     std::atomic_ref<PthreadMutex>(*mutex).store(destroyedMutex(), std::memory_order_release);
     return 0;
 }
 
 int APS5_VABI scePthreadMutexLock(PthreadMutex* mutex) {
-    return acquireMutex(resolveMutex(mutex, true), [](auto& native) { native.lock(); return true; }, 0, false);
+    return acquireMutex(resolveMutex(mutex, true), [](auto& native) {
+#ifdef _WIN32
+        while (!native.try_lock()) TimedWait::SleepNanos(1000000);
+#else
+        native.lock();
+#endif
+        return true;
+    }, 0, false);
 }
 
 int APS5_VABI scePthreadMutexUnlock(PthreadMutex* mutex) {

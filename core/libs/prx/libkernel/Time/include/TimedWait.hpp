@@ -1,6 +1,7 @@
 #ifndef CORE_LIBS_PRX_LIBKERNEL_TIME_INCLUDE_TIMEDWAIT_HPP
 #define CORE_LIBS_PRX_LIBKERNEL_TIME_INCLUDE_TIMEDWAIT_HPP
 
+#include <atomic>
 #include <chrono>
 #include <condition_variable>
 #include <cstdint>
@@ -9,6 +10,7 @@
 namespace TimedWait {
 
 bool Coarse();
+void BindThreadWaitState(std::atomic<int>* state);
 std::uint64_t NowNanos();
 std::uint64_t DeadlineNanos(std::uint64_t microseconds);
 std::uint64_t RemainingMicros(std::uint64_t deadlineNanos);
@@ -28,10 +30,17 @@ bool AcquireUntil(std::uint64_t deadlineNanos, TTryLock tryLock, TTryLockFor try
         const std::uint64_t now = NowNanos();
         if (now >= deadlineNanos) return false;
         const std::uint64_t remaining = deadlineNanos - now;
+#ifdef _WIN32
+        if (remaining > LOCK_TAIL_NANOS) {
+            PollSleepUntil(now + (remaining < LOCK_POLL_NANOS ? remaining : LOCK_POLL_NANOS));
+            continue;
+        }
+#else
         if (remaining > LOCK_BULK_NANOS) {
             if (tryLockFor((remaining - LOCK_BULK_NANOS) / 1000ULL)) return true;
             continue;
         }
+#endif
         if (remaining <= LOCK_TAIL_NANOS) SleepUntil(deadlineNanos);
         else PollSleepUntil(now + LOCK_POLL_NANOS);
     }

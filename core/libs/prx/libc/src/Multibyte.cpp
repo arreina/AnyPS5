@@ -1,4 +1,5 @@
 #include "prx/libc/include/general/VabiMacros.hpp"
+#include "prx/libc/include/SonyCrt.hpp"
 #include <cerrno>
 #include <cstddef>
 #include <cstdint>
@@ -48,6 +49,26 @@ std::size_t APS5_VABI wcrtomb_nid_postfix(char* destination, std::uint16_t value
     }
     *destination = static_cast<char>(value);
     return 1;
+}
+
+std::size_t APS5_VABI wcsrtombs_nid_postfix(char* destination, const std::uint16_t** source, std::size_t capacity, void* state) {
+    const auto* wide = *source;
+    std::size_t converted = 0;
+    while (!destination || converted < capacity) {
+        char byte;
+        if (wcrtomb_nid_postfix(&byte, wide[converted], state) == static_cast<std::size_t>(-1)) {
+            if (destination) *source = wide + converted;
+            return static_cast<std::size_t>(-1);
+        }
+        if (destination) destination[converted] = byte;
+        if (byte == '\0') {
+            if (destination) *source = nullptr;
+            return converted;
+        }
+        ++converted;
+    }
+    *source = wide + converted;
+    return converted;
 }
 
 int APS5_VABI wcsrtombs_s_nid_postfix(
@@ -136,6 +157,10 @@ std::size_t APS5_VABI mbsrtowcs_nid_postfix(std::uint16_t* destination, const ch
     }
     *source += converted;
     return converted;
+}
+
+std::size_t APS5_VABI mbstowcs_nid_postfix(std::uint16_t* dest, const char* src, std::size_t size) {
+    return SonyMbstowcs(dest, src, size);
 }
 
 }

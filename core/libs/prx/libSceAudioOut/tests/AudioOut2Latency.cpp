@@ -9,6 +9,8 @@ extern "C" {
 int APS5_VABI sceAudioOut2Initialize();
 int APS5_VABI sceAudioOut2Set3DLatency(int, std::uint32_t);
 int APS5_VABI sceAudioOut2MasteringInit(std::uint32_t);
+int APS5_VABI sceAudioOut2MasteringTerm();
+int APS5_VABI sceAudioOut2MasteringSetParam(const void*, std::uint32_t, std::uint32_t);
 }
 
 static void Require(bool value, const char* message) {
@@ -46,11 +48,25 @@ void TestMasteringInit() {
     Require(ThrowsRuntimeError([] { sceAudioOut2MasteringInit(1); }), "flags 1 must throw");
 }
 
+void TestMasteringTerm() {
+    Require(sceAudioOut2MasteringInit(0) == 0, "a second initialization must be accepted");
+    Require(sceAudioOut2MasteringTerm() == 0, "termination must be accepted");
+    Require(sceAudioOut2MasteringTerm() == 0, "termination must be accepted for each initialization");
+}
+
+void TestMasteringSetParam() {
+    const std::uint32_t params[4] = {1u, 0u, 0u, 0u};
+    Require(sceAudioOut2MasteringSetParam(params, 0, 0) == 0, "mastering parameters must be accepted");
+    Require(ThrowsRuntimeError([] { sceAudioOut2MasteringSetParam(nullptr, 0, 0); }), "null mastering parameters must throw");
+}
+
 }
 
 int main() {
     Require(sceAudioOut2Initialize() == 0, "initialization must succeed");
     TestSet3DLatency();
     TestMasteringInit();
+    TestMasteringTerm();
+    TestMasteringSetParam();
     return 0;
 }

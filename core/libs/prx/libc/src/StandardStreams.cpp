@@ -35,6 +35,15 @@ std::int32_t APS5_VABI ungetwc_nid_postfix(std::int32_t value, FileStream* strea
     return result;
 }
 int APS5_VABI getc_nid_postfix(FileStream* stream) { return fgetc_nid_postfix(stream); }
+int APS5_VABI getc_unlocked_nid_postfix(FileStream* stream) {
+#ifdef _WIN32
+    const int result = _fgetc_nolock(GetNativeStream(stream));
+#else
+    const int result = ::getc_unlocked(GetNativeStream(stream));
+#endif
+    stream->SyncUnlockedStatus();
+    return result;
+}
 int APS5_VABI __srget_nid_postfix(FileStream* stream) { return fgetc_nid_postfix(stream); }
 int APS5_VABI getchar_nid_postfix() { return fgetc_nid_postfix(__stdinp_nid_postfix); }
 int APS5_VABI fputc_nid_postfix(int value, FileStream* stream) {
@@ -43,6 +52,15 @@ int APS5_VABI fputc_nid_postfix(int value, FileStream* stream) {
     return result;
 }
 int APS5_VABI putc_nid_postfix(int value, FileStream* stream) { return fputc_nid_postfix(value, stream); }
+int APS5_VABI putc_unlocked_nid_postfix(int value, FileStream* stream) {
+#ifdef _WIN32
+    const int result = _fputc_nolock(value, GetNativeStream(stream));
+#else
+    const int result = ::putc_unlocked(value, GetNativeStream(stream));
+#endif
+    stream->SyncUnlockedStatus();
+    return result;
+}
 int APS5_VABI __swbuf_nid_postfix(int value, FileStream* stream) { return fputc_nid_postfix(value, stream); }
 int APS5_VABI putchar_nid_postfix(int value) { return fputc_nid_postfix(value, __stdoutp_nid_postfix); }
 int APS5_VABI ungetc_nid_postfix(int value, FileStream* stream) {
@@ -78,6 +96,10 @@ int APS5_VABI fileno_nid_postfix(FileStream* stream) {
 int APS5_VABI setvbuf_nid_postfix(FileStream* stream, char* buffer, int mode, std::size_t size) {
     if (mode < 0 || mode > 2) return -1;
     const int native = mode == 0 ? _IOFBF : mode == 1 ? _IOLBF : _IONBF;
+    if (native != _IONBF && size == 0) {
+        buffer = nullptr;
+        size = BUFSIZ;
+    }
     return std::setvbuf(GetNativeStream(stream), buffer, native, size);
 }
 void APS5_VABI setbuf_nid_postfix(FileStream* stream, char* buffer) {

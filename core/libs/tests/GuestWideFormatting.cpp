@@ -8,6 +8,7 @@
 
 extern "C" int APS5_VABI vswprintf_nid_postfix(char16_t*, std::size_t, const char16_t*, VaList*);
 extern "C" int APS5_VABI snwprintf_s_nid_postfix(char16_t*, std::size_t, const char16_t*, ...);
+extern "C" int APS5_VABI swprintf_nid_postfix(char16_t*, std::size_t, const char16_t*, ...);
 
 static int APS5_VABI Format(char16_t* buffer, std::size_t size, const char16_t* format, ...) {
 #ifdef _WIN32
@@ -88,6 +89,15 @@ static void CheckBounded() {
     Require(Format(buffer, 16, u"%s", nullNarrow) == 6 && buffer == std::u16string(u"(null)"), "vswprintf null %s argument");
 }
 
+static void CheckPointer() {
+    char16_t buffer[64];
+    const auto address = [](std::uintptr_t value) { return reinterpret_cast<void*>(value); };
+    Require(Format(buffer, 64, u"%p|%p|%p", address(0), address(0x1234), address(0xdeadbeef12)) == 23 &&
+        buffer == std::u16string(u"0x0|0x1234|0xdeadbeef12"), "vswprintf %p uses the 0x form");
+    Require(Format(buffer, 64, u"[%8p][%-8p][%08p][%.6p]", address(0x1a), address(0x1a), address(0x1a), address(0x1a)) == 40 &&
+        buffer == std::u16string(u"[    0x1a][0x1a    ][0x00001a][0x00001a]"), "vswprintf %p width and precision");
+}
+
 static void CheckCount() {
     char16_t buffer[16];
     int count = -7;
@@ -111,9 +121,35 @@ static void CheckCount() {
     Require(Format(buffer, 16, u"a%n", nullCount) < 0, "vswprintf null %n argument");
 }
 
+static void CheckSwprintf() {
+    char16_t buffer[8];
+    for (auto& unit : buffer) unit = u'x';
+    Require(swprintf_nid_postfix(buffer, 8, u"%d-%ls", 42, u"ab") == 5, "swprintf length");
+    Require(buffer == std::u16string(u"42-ab") && buffer[6] == u'x', "swprintf output");
+    Require(swprintf_nid_postfix(buffer, 8, u"中%ls%s", u"文", "\xc3\xa9") == 3, "swprintf non-ASCII length");
+    Require(buffer == std::u16string(u"中文é"), "swprintf non-ASCII output");
+    Require(swprintf_nid_postfix(buffer, 8, u"%s", "\xf0\x9f\x98\x80") == 2, "swprintf surrogate pair length");
+    Require(buffer == std::u16string(u"\U0001f600"), "swprintf surrogate pair output");
+    Require(swprintf_nid_postfix(buffer, 8, u"") == 0 && buffer[0] == 0, "swprintf empty format");
+    for (auto& unit : buffer) unit = u'x';
+    Require(swprintf_nid_postfix(buffer, 3, u"%ls", u"abcd") < 0, "swprintf truncation result");
+    Require(buffer == std::u16string(u"ab") && buffer[3] == u'x', "swprintf truncation output");
+    Require(swprintf_nid_postfix(buffer, 3, u"abc") < 0, "swprintf terminator does not fit");
+    buffer[0] = u'x';
+    Require(swprintf_nid_postfix(buffer, 0, u"a") < 0 && buffer[0] == u'x', "swprintf zero size");
+    Require(swprintf_nid_postfix(nullptr, 8, u"a") < 0, "swprintf null buffer");
+    Require(swprintf_nid_postfix(buffer, 5, u"%ls", u"abcd") == 4 && buffer == std::u16string(u"abcd"), "swprintf exact fit");
+    char16_t wide[16];
+    Require(swprintf_nid_postfix(wide, 16, u"%5ls|%-3c|%lc", u"wide", 'z', 0x20ac) == 11, "swprintf padded length");
+    Require(wide == std::u16string(u" wide|z  |€"), "swprintf padded output");
+    Require(swprintf_nid_postfix(wide, 16, u"%q") < 0 && wide[0] == 0, "swprintf invalid conversion");
+}
+
 int main() {
     CheckBounded();
+    CheckPointer();
     CheckCount();
+    CheckSwprintf();
     Check(u"%.2s", "\xc3\xa9\xc3\xa8", u"\u00e9\u00e8");
     Check(u"%.1s", "\xc3\xa9\xc3\xa8", u"\u00e9");
     Check(u"%.0s", "\xc3\xa9", u"");

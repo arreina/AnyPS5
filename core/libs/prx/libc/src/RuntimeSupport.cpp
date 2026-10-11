@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <cstdio>
+#include <cstdint>
 #include <iterator>
 #include <cstdlib>
 #include <stdexcept>
@@ -13,6 +14,7 @@
 #include <cinttypes>
 
 #include "prx/libc/include/General.hpp"
+#include "prx/libc/include/SonyCrt.hpp"
 #include "prx/libc/include/specifics/gcc/AtomicOps.hpp"
 #include "prx/libc/include/FileStream.hpp"
 
@@ -94,10 +96,12 @@ unsigned int APS5_VABI _Atomic_load_4_nid_postfix(volatile unsigned int* target,
 }
 
 std::intmax_t APS5_VABI strtoimax_nid_postfix(const char* str, char** endptr, int base) {
+    if (StopAtPrefixLetter_nid_no_patch(str, endptr, base)) return 0;
     return std::strtoimax(str, endptr, base);
 }
 
 std::uintmax_t APS5_VABI strtoumax_nid_postfix(const char* str, char** endptr, int base) {
+    if (StopAtPrefixLetter_nid_no_patch(str, endptr, base)) return 0;
     return std::strtoumax(str, endptr, base);
 }
 
@@ -130,8 +134,17 @@ void APS5_VABI _Unlockfilelock_nid_postfix(FileStream* stream) {
 #endif
 }
 
-unsigned long APS5_VABI _Stoul_nid_postfix(const char* str, char** endptr, int base) {
-    return std::strtoul(str, endptr, base);
+void APS5_VABI flockfile_nid_postfix(FileStream* stream) {
+    _Lockfilelock_nid_postfix(stream);
+}
+
+void APS5_VABI funlockfile_nid_postfix(FileStream* stream) {
+    _Unlockfilelock_nid_postfix(stream);
+}
+
+std::uint64_t APS5_VABI _Stoul_nid_postfix(const char* str, char** endptr, int base) {
+    if (StopAtPrefixLetter_nid_no_patch(str, endptr, base)) return 0;
+    return std::strtoull(str, endptr, base);
 }
 
 void APS5_VABI _Locksyslock_nid_postfix() {
@@ -140,6 +153,10 @@ void APS5_VABI _Locksyslock_nid_postfix() {
 
 void APS5_VABI _Unlocksyslock_nid_postfix() {
     g_sysLock.unlock();
+}
+
+unsigned __int128 APS5_VABI __udivti3_nid_postfix(unsigned __int128 dividend, unsigned __int128 divisor) {
+    return SonyUdivti3(dividend, divisor);
 }
 
 }
