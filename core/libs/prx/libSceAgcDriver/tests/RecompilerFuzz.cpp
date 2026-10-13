@@ -92,7 +92,7 @@ constexpr std::uint32_t kInstructionPrefixes[] = {
 };
 
 const std::uint32_t kCapabilities[] = {
-    spv::CapabilityFloat64, spv::CapabilityGroupNonUniform, spv::CapabilityGroupNonUniformBallot, spv::CapabilityGroupNonUniformShuffle,
+    spv::CapabilityFloat64, spv::CapabilityClipDistance, spv::CapabilityGroupNonUniform, spv::CapabilityGroupNonUniformBallot, spv::CapabilityGroupNonUniformShuffle,
     spv::CapabilitySignedZeroInfNanPreserve, 4448, 11, 5347, 5283, 3, spv::CapabilityImageGatherExtended,
     spv::CapabilityMinLod, spv::CapabilityStorageImageWriteWithoutFormat, spv::CapabilityStorageImageReadWithoutFormat,
     spv::CapabilitySampledImageArrayDynamicIndexing, spv::CapabilityStorageImageArrayDynamicIndexing,
