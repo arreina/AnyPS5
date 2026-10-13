@@ -1,4 +1,5 @@
 #include "prx/libSceAgcDriver/Execution/include/ProfileOutput.hpp"
+#include "ThreadOwned.hpp"
 #include "prx/libSceAgcDriver/Execution/include/Driver/Driver.hpp"
 #include "prx/libSceAgcDriver/Execution/include/Driver/Synchronization/DeferredLabels.hpp"
 #include "prx/libSceAgcDriver/Execution/include/Pm4.hpp"
@@ -10,8 +11,8 @@
 namespace AgcDriver::DriverDetail {
 
 std::map<std::size_t, Driver::ResolvedDispatch>& Driver::resolvedAhead() {
-    static thread_local std::map<std::size_t, ResolvedDispatch> resolved;
-    return resolved;
+    static thread_local std::map<std::size_t, ResolvedDispatch>* resolved = nullptr;
+    return ShaderRecompiler::ThreadOwned(resolved);
 }
 
 Driver::GroupCaptureStats& Driver::groupCaptureStats() {
@@ -178,6 +179,7 @@ void Driver::resolveGroupAhead(const Submission& submission, const QueueState& l
             const auto label = Pm4::DecodeLabelWrite(packet);
             if (!label) break;
             NoteLabel(labels, label->address, label->Bytes());
+            writes.emplace_back(label->address, label->address + label->Bytes().size());
         } else if (opcode != 0x3f && opcode != 0x42 && opcode != 0x46 && opcode != 0x58) {
             if (Pm4::AccessesMemory(header)) break;
             try {

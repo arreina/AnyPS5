@@ -11,6 +11,7 @@ namespace Cli {
 struct Args {
     bool showHelp = false;
     bool skipSyscallCheck = false;
+    bool trapSdkSyscallStubs = false;
     bool skipSceModule = false;
     bool toIntel = false;
     bool toRosetta = false;
@@ -28,6 +29,7 @@ struct Args {
     std::string runPath = "$ORIGIN/libs";
     std::set<std::string> excludedSceModules;
     std::vector<std::string> moduleDirectories;
+    std::vector<std::string> executables;
 };
 
 Args ParseArgs(int argc, char* argv[]);

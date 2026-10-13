@@ -11,6 +11,7 @@
 #include "prx/libSceAgcDriver/Graphics/include/Draw.hpp"
 #include "prx/libSceAgcDriver/Graphics/include/Recorder.hpp"
 #include "prx/libc/include/GuestAllocations.hpp"
+#include <chrono>
 #include <functional>
 #include <memory>
 #include <optional>
@@ -39,6 +40,8 @@ public:
     VulkanDevice(const VulkanDevice&) = delete;
     VulkanDevice& operator=(const VulkanDevice&) = delete;
     std::string DeviceName() const;
+    std::string DriverInfo() const;
+    bool CalibrateClock(double& gpuNs, std::chrono::steady_clock::time_point& cpu) const;
     ShaderRecompiler::SpirvTarget Target() const;
     std::optional<ShaderRecompiler::GeometryStageLimits> GeometryLimits() const;
     const std::uint32_t* WorkGroupCountLimit() const;
@@ -61,6 +64,7 @@ public:
     // mutex through the flush hook, so a thread submitting on another queue's behalf (a WAIT_REG_MEM
     // poller, a compute worker's between-packet flush) passes false: it must only submit, never wait.
     void SubmitRecorded(bool reapFirst = true);
+    void StoreIdleResults(bool reapFirst = true);
     // Unlocked drain: SubmitAndEpoch (under the mutex) returns the serial covering every recorded
     // batch (0: nothing in flight); WaitRecorded(serial) waits for it WITHOUT the mutex (the caller
     // holds a shared_ptr to this device); ReapRecorded(serial) (under the mutex) runs the completions
@@ -298,9 +302,11 @@ public:
     };
     IndirectDrawSupport DrawIndirectSupport() const;
     void EnqueueDraw(const Graphics::State& graphics, const Pm4::DrawParameters& draw, std::span<const Graphics::CompiledShader> shaders, std::span<const Graphics::GuestMemorySnapshot> snapshots = {});
+    bool PrebuildGraphicsLibraries(const Graphics::ShaderStages& stages, std::span<const Graphics::CompiledShader> shaders);
 
 private:
     VulkanDevice(const PresentationWindow* window, bool compileOnly);
+    friend struct VulkanDeviceTestAccess;
     // The device's Graphics::Context: a copy of the one built at setup (its instance functions
     // resolved then, its function table filled then), or with APS5_NO_CONTEXT_CACHE=1 built anew.
     Graphics::Context graphicsContext() const;
