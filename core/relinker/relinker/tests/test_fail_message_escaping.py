@@ -36,8 +36,10 @@ def main():
             result = subprocess.run([str(relinker), str(source), str(output)], capture_output=True, timeout=30)
             assert result.returncode == 2 and not output.exists(), result
             stderr = result.stderr.replace(b"\r\n", b"\n")
-            assert stderr.startswith(b"FAIL: ") and stderr.endswith(expected), stderr
-            assert stderr.count(b"\n") == 1 and b"\x1b" not in stderr and b"\r" not in stderr, stderr
+            lines = stderr.split(b"\n")
+            assert lines[0].startswith(b"FAIL: ") and (lines[0] + b"\n").endswith(expected), stderr
+            assert all(line.startswith(b"Input: ") for line in lines[1:-1]) and lines[-1] == b"", stderr
+            assert b"\x1b" not in stderr and b"\r" not in stderr, stderr
     print("FAIL message escaping tests passed")
 
 

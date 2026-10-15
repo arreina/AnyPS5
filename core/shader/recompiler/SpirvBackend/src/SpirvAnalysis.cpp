@@ -391,9 +391,6 @@ SpirvRequirements AnalyzeProgramRequirements(const IrProgram& program) {
                     throw std::runtime_error("shared operation has invalid resource kind");
                 }
                 if (program.Resources().stage != IrShaderStage::Compute && program.Resources().stage != IrShaderStage::Mesh && kind == ResourceKind::Lds) {
-                    if (sharedAccess == SharedAccess::Atomic) {
-                        throw std::runtime_error("LDS atomic outside compute and mesh stages: function-local LDS cannot hold SPIR-V atomics");
-                    }
                     requirements.functionLds = true;
                 } else if (sharedAccess == SharedAccess::Atomic && inst->Type() == IrType::U64 && kind == ResourceKind::Lds) {
                     requirements.ldsLock = true;

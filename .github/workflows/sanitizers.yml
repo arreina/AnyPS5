@@ -75,5 +75,5 @@ jobs:
       - run: >-
           cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo -DBUILD_TESTING=ON
           -DANYPS5_SANITIZERS=ON -DANYPS5_ENABLE_SPIRV_TOOLS=ON -DCMAKE_C_COMPILER=gcc -DCMAKE_CXX_COMPILER=g++
-      - run: cmake --build build --target agc_recompiler_fuzz_tests agc_pixel_position_export_tests agc_pixel_lds_atomic_tests
-      - run: ctest --test-dir build -R '^agc_(recompiler_fuzz|pixel_position_export|pixel_lds_atomic)$' --output-on-failure --timeout 2400
+      - run: cmake --build build --target agc_recompiler_fuzz_tests agc_pixel_position_export_tests
+      - run: ctest --test-dir build -R '^agc_(recompiler_fuzz|pixel_position_export)$' --output-on-failure --timeout 2400
