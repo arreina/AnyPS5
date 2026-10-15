@@ -24,7 +24,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          submodules: true
+          submodules: recursive
       - run: sudo apt-get update && sudo apt-get install -y cppcheck libpipewire-0.3-dev libpulse-dev libasound2-dev libxrandr-dev
       - run: cmake -S . -B build $CONFIGURE
       - run: cmake --build build
@@ -48,7 +48,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          submodules: true
+          submodules: recursive
       - run: sudo apt-get update && sudo apt-get install -y clang-tidy libpipewire-0.3-dev libpulse-dev libasound2-dev libxrandr-dev
       - run: cmake -S . -B build $CONFIGURE
       - run: cmake --build build
